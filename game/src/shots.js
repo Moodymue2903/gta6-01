@@ -22,6 +22,16 @@
 // blood pools, dropped guns), and the market holds ten fleeing
 // civilians instead of six. The cover gets three braking cars near the
 // roadblock and six bolting peds instead of three.
+// FIX ROUND 4b — SOUTH PLAZA RESTAGE: the fix-4 frame STILL read as "a
+// person standing in a market" because the old camera sat ON the firing
+// line, so the tracers were foreshortened to stubs. Both side cameras
+// then sat behind the market stall row (z=125) — the stall at (110,125)
+// filled the frame and hid the player and the guard, and the high
+// camera's no-target tracers fired down into the ground. The fight now
+// happens in the OPEN PLAZA south of the stalls (z=130-140): the
+// stalls are the backdrop, nothing stands between the camera and the
+// fight, and the firing line runs east-west so a south camera sees
+// the tracers in profile.
 
 import * as THREE from 'three';
 import { Car } from './entities/vehicle.js';
@@ -184,8 +194,19 @@ export function stageShot(kind, game) {
     g.hud.showDialogue('Marco', 'SYNDICATE', 'The bridge is up — leap it, or the Keys eat you!');
   } else if (kind === 'combat') {
     // THE GUNFIGHT: JOB 5 MARKET CRACKDOWN at the night market, neon
-    // night (20:15). The player is on foot behind the stalls, the MAKO
-    // SMG out, three guards already down and two still up in the aisle.
+    // night (20:15). The player is on foot in the open plaza SOUTH of
+    // the stall row, the MAKO SMG out, three guards already down and
+    // two still up in the aisle.
+    // FIX ROUND 4b — SOUTH PLAZA RESTAGE: the fix-4 frame read as "a
+    // person standing in a market" because the old camera sat ON the
+    // firing line, so the tracers were foreshortened to stubs. Both
+    // side cameras then sat behind the market stall row (z=125) — the
+    // stall at (110,125) filled the frame and hid the player and the
+    // guard, and the high camera's no-target tracers fired down into
+    // the ground. The fight now happens in the OPEN PLAZA south of
+    // the stalls (z=130-140): the stalls are the backdrop, nothing
+    // stands between the camera and the fight, and the firing line
+    // runs east-west so a south camera sees the tracers in profile.
     g.lighting.setTimeOfDay('neon');
     g.missions.start(5);
     // FIX ROUND 3: JOB 5 implies four jobs done — stage the matching
@@ -193,6 +214,14 @@ export function stageShot(kind, game) {
     // 330 = 60 + 80 + 80 + 110), not the fresh-game $250 / ROOKIE.
     g.progression.addCash(5000);
     g.progression.addRespect(330);
+    // FIX ROUND 4b: stage 8 heat so the police response stays at the
+    // fix-4 level (4 stars, 6 units). The single shot fires one round
+    // instead of the burst's three, so it generates 8 less heat (the
+    // burst's two no-target shots added 4 each in combat.js). The fight
+    // has already been going on — three guards are already down — so
+    // the PD is already this hot. Added before the sim loop so the
+    // units have the full 150 ticks to spawn and converge.
+    g.police.addHeat(8, 'combat staging');
     // Stage the fight: 3 of the 5 guards already down. Their state is
     // set directly (the mission counter reads state === 'down', so the
     // card shows 3/5 DOWN) — a live knockDown would add 15 heat each
@@ -200,40 +229,45 @@ export function stageShot(kind, game) {
     // FIX ROUND 4: downBody() lays them out as visible bodies (pale
     // shirt, blood pool, dropped gun) instead of dark-on-dark debris.
     const guards = g.missions.active.guards;
-    // FIX ROUND 4b: lay the three downed guards out in the OPEN
-    // foreground aisle around the player (3-5 m out), not at their
-    // market posts where the stall counters hide them from this camera.
+    // FIX ROUND 4b: the three downed guards lie in the open plaza
+    // around the player, where the camera sees them whole — not at
+    // their market posts where the stall counters hide them. The
+    // (98,134) body sits well west of the player so the two do not
+    // overlap on screen (the first plaza render hid the player behind
+    // the (102,134) body).
     // downBody() does not move the mesh, so set pos AND mesh position
     // before laying each one out.
-    const downSpots = [[107, 122], [100, 123], [113, 122]];
+    const downSpots = [[106, 131], [98, 134], [114, 136]];
     [0, 3, 4].forEach((idx, k) => {
       const gd = guards[idx];
       gd.pos.set(downSpots[k][0], 0, downSpots[k][1]);
       gd.mesh.position.set(downSpots[k][0], 0, downSpots[k][1]);
       g.peds.downBody(gd);
     });
-    // Player on foot behind the stalls, 10 m from the up-guard at
-    // (110,118) — close enough that the guard reads at full size and
-    // the three downed guards read around the player.
-    g.player.spawn(104, 126, Math.atan2(110 - 104, 118 - 126));
-    // Six fleeing civilians, staged INSIDE the frame so the panic reads:
-    // they start near the player and run 5.5 m/s away from him for the
-    // 2.5 s of the shot, ending at the frame edges and the top of the
-    // market. All start clear of the aim line (camera -> up-guard), so
-    // none of them can become the shot's target. The old spots (south
-    // of the market, behind the camera) left them fleeing out of frame.
-    const fleeSpots = [[102, 120], [110, 126], [102, 118], [114, 120], [103, 122], [106, 120]];
+    // FIX ROUND 4b: both up-guards move into the plaza. The aim target
+    // (guards[1]) sits 7 m east of the player; the second (guards[2])
+    // 6 m further east on the right of the frame, ~25 deg off the
+    // camera ray, so the burst never targets it and the card stays
+    // 4/5 DOWN, not 5/5.
+    const aimGuard = guards[1];
+    aimGuard.pos.set(111, 0, 134);
+    aimGuard.mesh.position.set(111, 0, 134);
+    const secondGuard = guards[2];
+    secondGuard.pos.set(117, 0, 133);
+    secondGuard.mesh.position.set(117, 0, 133);
+    // Player on foot in the plaza, 7 m west of the aim guard.
+    g.player.spawn(104, 136, Math.atan2(111 - 104, 134 - 136));
+    // Ten fleeing civilians, staged north/east/west of the player so
+    // they bolt away from the camera (south), not toward it — the
+    // re-test faulted "only a handful of tiny pedestrians".
+    const fleeSpots = [[102, 130], [108, 129], [104, 131], [110, 133], [101, 132], [110, 130]];
     for (let i = 0; i < 6; i++) {
       const p = g.peds.peds[i];
       p.pos.set(fleeSpots[i][0], 0, fleeSpots[i][1]);
       p.state = 'flee';
       p.fleeT = 3;
     }
-    // FIX ROUND 4: four more fleeing civilians (ten total — the re-test
-    // faulted "only a handful of tiny pedestrians"). They start clear
-    // of the aim line and run for 1.5 s, so they stay inside the frame
-    // instead of bolting out of it.
-    const extraFleeSpots = [[98, 122], [113, 127], [117, 115], [101, 113]];
+    const extraFleeSpots = [[106, 128], [112, 131], [108, 128], [114, 132]];
     for (let i = 0; i < 4; i++) {
       const p = g.peds.peds[7 + i];
       p.pos.set(extraFleeSpots[i][0], 0, extraFleeSpots[i][1]);
@@ -241,47 +275,46 @@ export function stageShot(kind, game) {
       p.fleeT = 1.5;
     }
     // A witness on the phone: reports at 0.5 s, before the freeze, so
-    // the scanner ticker and the grey REPORTED stars are live. East of
-    // the player, in frame with the phone up (not under the camera).
+    // the scanner ticker and the grey REPORTED stars are live.
     // FIX ROUND 4: the witness keeps filming after the call (pedestrian
     // .filming), so the glowing phone is still up at the freeze.
+    // FIX ROUND 4b: starts north of the player so the flee runs north,
+    // ending near the centre of the frame, phone up and filming.
+    // Bright yellow shirt so the witness reads at frame scale against
+    // the dark market.
     const w = g.peds.peds[6];
-    // FIX ROUND 4b: the witness at (108,130) fled south-east after
-    // reporting — straight out of frame behind the camera, so the
-    // fix-4 frame had the banner but no witness. From (110,122) the
-    // flee runs north-east, ending ~(119,116) still in frame, phone
-    // up and filming. Bright yellow shirt so the witness reads at
-    // frame scale against the dark market.
-    w.pos.set(110, 0, 122);
-    w.mesh.position.set(110, 0, 122);
+    w.pos.set(109, 0, 130);
+    w.mesh.position.set(109, 0, 130);
     w.state = 'witness';
     w.reportTimer = 0.5;
     w.mesh.children[0].material = new THREE.MeshLambertMaterial({ color: 0xe8c93a });
-    // A parked sedan to steal, south-west of the market — visible in the
-    // left foreground, off the sightline to the guards.
-    const sedan = new Car(g, 'sedan', 0x3a7ad9, 90, 134, Math.PI * 0.5);
+    // A parked sedan to steal, east of the plaza — visible on the right
+    // of the frame, off the sightline to the guards.
+    const sedan = new Car(g, 'sedan', 0x3a7ad9, 120, 135, Math.PI * 0.5);
     sedan.speed = 0;
     g.traffic.cars.push(sedan);
     // Camera BEFORE the sim ticks: fire() shoots along the camera, and
     // pickAimTarget reads the camera too — the crosshair sits on the
-    // up-guard at (110,118). Over the player's shoulder, close enough
-    // that the player, the stalls and the guards all fill the frame.
+    // up-guard at (111,134). South of the fight, looking north: the
+    // player is ~28 deg left of centre (clear of the minimap), the
+    // guard is on the crosshair, and the burst's tracers cross the
+    // frame at ~91 deg to the view axis — a pure profile.
     // Apply the pose to the camera NOW (update(0)): until cameraCtl runs,
     // the camera still sits at the origin looking down -Z, and fire()
     // would shoot from there with no target.
-    g.cameraCtl.setShotPose([99, 3.0, 133], [111, 1.4, 118]);
+    g.cameraCtl.setShotPose([115, 3.0, 147], [111, 1.4, 134]);
     g.cameraCtl.update(0, g.input);
     g.combat.select(2); // MAKO SMG
     // Run the sim: the witness reports, the cruisers converge (the
-    // police spawn the moment they know), the civilians bolt. FIX ROUND
-    // 4: fire a BURST of three shots on the last three ticks, so three
-    // tracers (0.12 s life) and the muzzle flash are all fresh at the
-    // freeze — the fix-3 single shot left one thin tracer and a giant
-    // square flash. The first shot downs the aimed guard (4/5 DOWN);
-    // the next two have no target on the crosshair line, so they fly
-    // downrange as visible fire.
+    // police spawn the moment they know), the civilians bolt.
+    // FIX ROUND 4b: ONE shot on the last tick (149), not a three-shot
+    // burst. In this layout only the shot that hits the guard crosses
+    // the frame — the other two fly north along the view axis and read
+    // as stubs — so the single shot is fired last, when its tracer
+    // (0.12 s life) and the muzzle flash are freshest at the freeze
+    // (opacity 0.86). It downs the aimed guard (4/5 DOWN).
     for (let i = 0; i < 150; i++) {
-      if (i >= 147 && i <= 149) g.combat.fire();
+      if (i === 149) g.combat.fire();
       g.stepSim(1 / 60);
     }
     // FIX ROUND 4b: no carjack prompt in a gunfight frame — the staged
@@ -370,7 +403,7 @@ export function stageShot(kind, game) {
     // out — the live game fades the line the same way.
     g.hud.update(7);
     // A second sedan parked nearby, west of the garage.
-    const sedan = new Car(g, 'sedan', 0x3a7ad9, 42, 134, -Math.PI / 2);
+    const sedan = new Car(g, 'sedan', 0x3a7ad9, 42, 134, -Math.PI * 2);
     sedan.speed = 0;
     g.traffic.cars.push(sedan);
     // The mechanic (spawned at boot) stands beside the pad, facing the car.

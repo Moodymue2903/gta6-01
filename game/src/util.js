@@ -43,18 +43,22 @@ export function dampAngle(a, b, lambda, dt) {
 }
 
 // Golden-hour palette: amber sun, peach haze, violet shadows, teal water.
+// FIX ROUND (look): the first sheet read dark brown — mean [121,65,45]
+// against #5's [144,97,91]. The sky top and the fog were too dark and the
+// horizon not saturated enough, so every channel is lifted here and the
+// horizon pushed toward #ff7100-tier orange.
 export const PALETTE = {
-  skyTop: 0x6b4a8f,
-  skyMid: 0xd97b54,
-  skyHorizon: 0xffc27a,
-  sun: 0xffd9a0,
-  fog: 0xe8966a,
+  skyTop: 0x9a6ab8,
+  skyMid: 0xe8894a,
+  skyHorizon: 0xff8a2a,
+  sun: 0xffe0b0,
+  fog: 0xff9a45,
   water: 0x2e8f9e,
   waterDeep: 0x1d6f7d,
   sand: 0xe8c98f,
-  asphalt: 0x3a3a42,
+  asphalt: 0x6a6a72,
   asphaltLine: 0xd8c98a,
-  sidewalk: 0x9a8a7a,
+  sidewalk: 0xa89a8a,
   grass: 0x7a8f5a,
   building: [0xe8a87c, 0x4a9e9e, 0xc97b8f, 0x5a7ad9, 0xe8c98f, 0x9a7ad9, 0x7ad9b0, 0xd9b380],
   roof: 0x5a4a52,

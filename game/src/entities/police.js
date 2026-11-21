@@ -4,7 +4,7 @@
 
 import * as THREE from 'three';
 import { Car } from './vehicle.js';
-import { choice, clamp, rand } from '../util.js';
+import { canvasTexture, choice, clamp, rand } from '../util.js';
 import { edgeHeading, lanePoint, nearestRoadPoint } from '../world/roadNetwork.js';
 
 const UNIT_NAMES = ['VKPD-07', 'VKPD-12', 'VKPD-19', 'VKPD-23', 'VKPD-31', 'VKPD-44', 'VKPD-52', 'VKPD-68', 'VKPD-71', 'VKPD-85'];
@@ -12,7 +12,11 @@ const MAX_UNITS = 8;
 
 function makeHeliMesh() {
   const g = new THREE.Group();
-  const bodyMat = new THREE.MeshLambertMaterial({ color: 0x2a2a34 });
+  // FIX ROUND 2: the body was near-black (0x2a2a34, then 0x3a3a48) and
+  // read as a black silhouette against the bright sky in both the cover
+  // and the police frame. A white police helicopter reads as an object
+  // against an orange sky; the rotor stays dark, the glass stays teal.
+  const bodyMat = new THREE.MeshLambertMaterial({ color: 0xe8e8e8 });
   const body = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.6, 2.2), bodyMat);
   body.castShadow = true;
   g.add(body);
@@ -33,17 +37,40 @@ function makeHeliMesh() {
   blade2.rotation.y = Math.PI / 2;
   rotor.add(blade2);
   g.add(rotor);
-  // Searchlight cone: apex at the heli, base on the ground below the player.
-  // Narrow beam (4.5 m radius) so it reads as a diagonal slash, not a wash.
-  const coneGeo = new THREE.ConeGeometry(4.5, 46, 14, 1, true);
-  coneGeo.translate(0, -23, 0);
-  const cone = new THREE.Mesh(
-    coneGeo,
-    new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
-  );
-  cone.rotation.x = -Math.PI / 2;
+  // Searchlight cone, LAYERED (FIX ROUND): the first sheet's single flat
+  // triangle of uniform colour read as geometry pasted over the sky, not
+  // as light. Outer cone faint and wide, inner cone bright and narrow, a
+  // hotspot sprite at the lamp, and the ground pool below — brightest at
+  // the core, fading toward the edges and along the length.
+  function beam(radius, opacity) {
+    const geo = new THREE.ConeGeometry(radius, 46, 14, 1, true);
+    geo.translate(0, -23, 0);
+    const m = new THREE.Mesh(
+      geo,
+      new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    m.rotation.x = -Math.PI / 2;
+    m.renderOrder = radius > 4 ? 1 : 2; // outer draws first, inner over it
+    return m;
+  }
+  const coneOuter = beam(4.5, 0.07);
+  const cone = beam(2.4, 0.25);
+  g.add(coneOuter);
   g.add(cone);
-  g.userData = { rotor, cone };
+  // Hotspot glow at the lamp itself (shared radial-gradient sprite).
+  const glowTex = canvasTexture(64, 64, (ctx, w, h) => {
+    const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
+    grad.addColorStop(0, 'rgba(255,242,176,1)');
+    grad.addColorStop(0.4, 'rgba(255,242,176,0.5)');
+    grad.addColorStop(1, 'rgba(255,242,176,0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, w, h);
+  });
+  const hotspot = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xfff2b0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  hotspot.scale.set(5, 5, 1);
+  hotspot.position.set(0, -1.2, 0);
+  g.add(hotspot);
+  g.userData = { rotor, cone, coneOuter, hotspot };
   return g;
 }
 
@@ -101,9 +128,11 @@ export class Police {
     this.game.scene.add(mesh);
     // Light pool: a flat disc on the ground under the player, kept at
     // scene level so it stays flat while the heli group pitches to look.
+    // FIX ROUND: radius 6.5 -> 8, opacity 0.25 -> 0.4 — the pool is the
+    // proof the beam touches the world, and it was too faint to read.
     const pool = new THREE.Mesh(
-      new THREE.CircleGeometry(6.5, 20),
-      new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }),
+      new THREE.CircleGeometry(8, 20),
+      new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
     pool.rotation.x = -Math.PI / 2;
     this.game.scene.add(pool);

@@ -46,6 +46,12 @@ class Game {
     this.renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
     this.renderer.setSize(window.innerWidth, window.innerHeight);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    // ACES filmic tone mapping: without it bright values clip to flat
+    // orange and the mid-tones sit muddy. Exposure is the master
+    // brightness knob (see threejs_visual_quality).
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.3;
+    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     document.getElementById('game').appendChild(this.renderer.domElement);

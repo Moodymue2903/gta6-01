@@ -56,12 +56,14 @@ export function buildCity(scene, rng) {
   const animated = { ferris: null, ferrisCabins: [], beam: null, mastLight: null, bridgeLeafE: null, bridgeLeafW: null, waterTex: null };
 
   // --- Water: one big teal plane with a scrolling wave texture. ---
+  // FIX ROUND: the sea read as a flat dark slab in the police frame.
+  // Lighter base + more sun glints so it reads as water at golden hour.
   const waterTex = canvasTexture(256, 256, (ctx, w, h) => {
-    ctx.fillStyle = '#2e8f9e';
+    ctx.fillStyle = '#3a9aa8';
     ctx.fillRect(0, 0, w, h);
-    ctx.strokeStyle = 'rgba(255,220,170,0.25)';
+    ctx.strokeStyle = 'rgba(255,220,170,0.4)';
     ctx.lineWidth = 2;
-    for (let i = 0; i < 26; i++) {
+    for (let i = 0; i < 40; i++) {
       const y = Math.random() * h;
       ctx.beginPath();
       ctx.moveTo(Math.random() * w, y);
@@ -79,7 +81,9 @@ export function buildCity(scene, rng) {
   animated.waterTex = waterTex;
 
   // --- Island ground slabs. ---
-  const groundCols = { downtown: 0x8a7a6a, boardwalk: 0xa88a68, port: 0x7d7468 };
+  // FIX ROUND: ground slabs lifted a touch — the first sheet's streets
+  // and plazas sat in the same dark brown band as the buildings.
+  const groundCols = { downtown: 0x9a8a7a, boardwalk: 0xb89a78, port: 0x8d8478 };
   for (const isl of ISLANDS) {
     const w = isl.x1 - isl.x0;
     const d = isl.z1 - isl.z0;
@@ -213,9 +217,15 @@ export function buildCity(scene, rng) {
   const boxGeo = new THREE.BoxGeometry(1, 1, 1);
   boxGeo.translate(0, 0.5, 0);
   const col = new THREE.Color();
+  // FIX ROUND: a dedicated RNG for the roof/clutter colours, so the main
+  // plot stream — and everything after it — is untouched.
+  const fixRng = mulberry32(20261122);
   buckets.forEach((list, bi) => {
     if (!list.length) return;
-    const mat = new THREE.MeshLambertMaterial({ map: classes[bi].tex, emissive: 0x664422, emissiveMap: classes[bi].tex, emissiveIntensity: 0.35 });
+    // FIX ROUND: the brown emissive wash (0x664422 @ 0.35) tinted every
+    // facade muddy. Amber, weaker — the windows stay warm, the walls keep
+    // their instance colour.
+    const mat = new THREE.MeshLambertMaterial({ map: classes[bi].tex, emissive: 0x7a4a22, emissiveMap: classes[bi].tex, emissiveIntensity: 0.22 });
     const inst = new THREE.InstancedMesh(boxGeo, mat, list.length);
     list.forEach((p, i) => {
       q4.setFromAxisAngle(up, p.rot);
@@ -227,18 +237,59 @@ export function buildCity(scene, rng) {
     inst.castShadow = true;
     inst.receiveShadow = true;
     scene.add(inst);
-    // Roof caps.
+    // Roof caps, one per building, in varied roof colours so the skyline
+    // is not one dark mauve band (FIX ROUND).
+    const roofCols = [0x5a4a52, 0x7a4a3a, 0x4a5a6a, 0x8a6a4a, 0x6a4a5a];
     const roofGeo = new THREE.BoxGeometry(1, 1, 1);
-    const roofMat = new THREE.MeshLambertMaterial({ color: PALETTE.roof });
+    const roofMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
     const roofs = new THREE.InstancedMesh(roofGeo, roofMat, list.length);
     list.forEach((p, i) => {
       q4.setFromAxisAngle(up, p.rot);
       m4.compose(new THREE.Vector3(p.x, p.h, p.z), q4, new THREE.Vector3(p.w + 0.6, 0.8, p.d + 0.6));
       roofs.setMatrixAt(i, m4);
+      col.setHex(choice(fixRng, roofCols));
+      roofs.setColorAt(i, col);
     });
     roofs.castShadow = true;
     scene.add(roofs);
   });
+  // Roof clutter (water tanks, vents, antennae) on a share of tall
+  // buildings, so the skyline steps instead of running flat. Uses the same
+  // dedicated RNG (see above) so the main plot stream is untouched.
+  {
+    const clutterRng = fixRng;
+    const spots = [];
+    for (const list of buckets) {
+      for (const p of list) {
+        if (p.h < 25 || clutterRng() > 0.45) continue;
+        spots.push({
+          x: p.x + rand(clutterRng, -p.w / 4, p.w / 4),
+          y: p.h + 0.8,
+          z: p.z + rand(clutterRng, -p.d / 4, p.d / 4),
+          w: rand(clutterRng, 1.6, 3.2),
+          h: rand(clutterRng, 1.2, 3.4),
+          d: rand(clutterRng, 1.6, 3.2),
+          rot: p.rot,
+          col: choice(clutterRng, [0x8a7a6a, 0x6a6a72, 0xa88a5a, 0x7a5a4a]),
+        });
+      }
+    }
+    if (spots.length) {
+      const cGeo = new THREE.BoxGeometry(1, 1, 1);
+      cGeo.translate(0, 0.5, 0);
+      const cMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      const clutter = new THREE.InstancedMesh(cGeo, cMat, spots.length);
+      spots.forEach((s, i) => {
+        q4.setFromAxisAngle(up, s.rot);
+        m4.compose(new THREE.Vector3(s.x, s.y, s.z), q4, new THREE.Vector3(s.w, s.h, s.d));
+        clutter.setMatrixAt(i, m4);
+        col.setHex(s.col);
+        clutter.setColorAt(i, col);
+      });
+      clutter.castShadow = true;
+      scene.add(clutter);
+    }
+  }
 
   // --- Palms along the beach and boulevards (instanced trunks + crowns). ---
   const palmSpots = [];
@@ -418,7 +469,9 @@ export function buildCity(scene, rng) {
   animated.mastLight = mastLight;
 
   // --- Drawbridge leaves on the east causeway (two steel leaves). ---
-  const leafMat = new THREE.MeshLambertMaterial({ color: 0x8a7a6a });
+  // FIX ROUND 2: lighter steel (0x8a7a6a -> 0xa89a8a) — the leaves read as
+  // a dark slab in the cover's lower right.
+  const leafMat = new THREE.MeshLambertMaterial({ color: 0xa89a8a });
   const leafEGeo = new THREE.BoxGeometry(8, 0.4, 13.4);
   leafEGeo.translate(4, 0, 0); // hinge at x = 232
   const leafE = new THREE.Mesh(leafEGeo, leafMat);

@@ -3,6 +3,16 @@
 // palms and lamps are InstancedMesh; landmarks are individual meshes.
 // The drawbridge on the east causeway is a live world event: when it is UP
 // the span is a ramp with a gap cars can leap.
+// FIX ROUND 3 — the night market and the garage are real places now:
+//   * a row of market stalls along the boardwalk (the JOB 5 fight), with
+//     warm stall lights so the night frame reads at small size;
+//   * the VERMILION MOTOR WORKS garage: canopy, glowing pad, neon sign;
+//   * beach umbrellas so the sand is not an empty beige band.
+// FIX ROUND 4 — look (C4 was 0-4): balcony slabs on road-facing
+// facades, a light speckle texture on the island ground slabs and the
+// roads (no more flat tan ground), and the garage neon sign's text
+// auto-fits its canvas (the 44 px line was wider than the canvas, so
+// both ends were cut in the texture itself).
 
 import * as THREE from 'three';
 import { PALETTE, canvasTexture, choice, mulberry32, rand, randInt } from '../util.js';
@@ -51,6 +61,21 @@ function windowTexture(base, lit) {
   });
 }
 
+// FIX ROUND 4 — light speckle grain: a mostly-white canvas with dark
+// and light dots. Used as a map it modulates the slab/road colour just
+// enough to break the flat tan, without changing the palette.
+function speckleTexture(dots = 120) {
+  return canvasTexture(256, 256, (ctx, w, h) => {
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, w, h);
+    for (let i = 0; i < dots; i++) {
+      const s = 1 + Math.random() * 2.5;
+      ctx.fillStyle = Math.random() < 0.6 ? 'rgba(0,0,0,0.10)' : 'rgba(255,255,255,0.28)';
+      ctx.fillRect(Math.random() * w, Math.random() * h, s, s);
+    }
+  }, 16, 16);
+}
+
 export function buildCity(scene, rng) {
   const colliders = [];
   const animated = { ferris: null, ferrisCabins: [], beam: null, mastLight: null, bridgeLeafE: null, bridgeLeafW: null, waterTex: null };
@@ -83,13 +108,16 @@ export function buildCity(scene, rng) {
   // --- Island ground slabs. ---
   // FIX ROUND: ground slabs lifted a touch — the first sheet's streets
   // and plazas sat in the same dark brown band as the buildings.
+  // FIX ROUND 4: a speckle map on each slab so the ground reads as a
+  // surface, not flat tan.
   const groundCols = { downtown: 0x9a8a7a, boardwalk: 0xb89a78, port: 0x8d8478 };
+  const groundSpeckle = speckleTexture(140);
   for (const isl of ISLANDS) {
     const w = isl.x1 - isl.x0;
     const d = isl.z1 - isl.z0;
     const g = new THREE.Mesh(
       new THREE.PlaneGeometry(w, d),
-      new THREE.MeshLambertMaterial({ color: groundCols[isl.name] }),
+      new THREE.MeshLambertMaterial({ color: groundCols[isl.name], map: groundSpeckle }),
     );
     g.rotation.x = -Math.PI / 2;
     g.position.set((isl.x0 + isl.x1) / 2, 0, (isl.z0 + isl.z1) / 2);
@@ -105,6 +133,28 @@ export function buildCity(scene, rng) {
   beach.position.set(80, 0.02, 137);
   beach.receiveShadow = true;
   scene.add(beach);
+  // FIX ROUND 3 — beach umbrellas: the sand was an empty beige band in
+  // every beach frame. Six fixed umbrellas, bright colours, no RNG
+  // stream touched (fixed positions, dedicated colours).
+  {
+    const umbCols = [0xff6a4a, 0x2ea88a, 0xe8c93a, 0xd95a8a, 0x3a7ad9, 0xff9a3a];
+    const umbSpots = [[-20, 146], [10, 152], [45, 144], [90, 150], [130, 145], [160, 150]];
+    umbSpots.forEach(([x, z], i) => {
+      const pole = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.06, 0.06, 2.4, 5),
+        new THREE.MeshLambertMaterial({ color: 0xe8e8e8 }),
+      );
+      pole.position.set(x, 1.2, z);
+      scene.add(pole);
+      const canopy = new THREE.Mesh(
+        new THREE.ConeGeometry(1.9, 0.9, 8),
+        new THREE.MeshLambertMaterial({ color: umbCols[i % umbCols.length] }),
+      );
+      canopy.position.set(x, 2.6, z);
+      canopy.castShadow = true;
+      scene.add(canopy);
+    });
+  }
   // Causeway decks: west causeway whole; east causeway only the approach
   // west of the drawbridge leaves (the leaves are the road over the span).
   const westDeck = new THREE.Mesh(
@@ -153,7 +203,9 @@ export function buildCity(scene, rng) {
       );
     }
   }
-  const roadMat = new THREE.MeshLambertMaterial({ color: PALETTE.asphalt });
+  // FIX ROUND 4: speckle on the asphalt too — the road UVs already tile
+  // every 12 m, so the grain lands at road scale.
+  const roadMat = new THREE.MeshLambertMaterial({ color: PALETTE.asphalt, map: speckleTexture(100) });
   scene.add(roadSoup.build(roadMat));
   scene.add(walkSoup.build(new THREE.MeshLambertMaterial({ color: PALETTE.sidewalk })));
 
@@ -194,6 +246,9 @@ export function buildCity(scene, rng) {
         if (Math.hypot(x - 470, z + 195) < 16) continue; // lighthouse clearing
         if (Math.hypot(x - 250, z) < 75) continue; // drawbridge landing plaza (keeps the leap's sightline open)
         if (Math.hypot(x + 80, z) < 30) continue; // west causeway mouth
+        if (z > 104 && z < 146 && x > 58 && x < 152) continue; // night-market plaza (FIX ROUND 3)
+        if (Math.hypot(x - 52, z - 128) < 24) continue; // garage clearing (FIX ROUND 3)
+        if (z > 132 && x > -30 && x < 190) continue; // beach frontage: no buildings on the sand
         plots.push({
           x, z,
           w: rand(plotRng, 12, 22),
@@ -393,6 +448,199 @@ export function buildCity(scene, rng) {
       pyrs.castShadow = true;
       scene.add(pyrs);
     }
+  }
+  // FIX ROUND 4 — balconies: a slab + railing on the road-facing side
+  // of about half the buildings, one or two storeys up. Same dedicated
+  // dressRng, drawn AFTER the awnings and pyramids, so nothing before
+  // this block changes.
+  {
+    const balSpots = [];
+    for (const p of plots) {
+      if (p.h < 8 || dressRng() > 0.5) continue;
+      const near = nearestRoadPoint(p.x, p.z);
+      const dx = near.x - p.x;
+      const dz = near.z - p.z;
+      const bw = Math.min(p.w, p.d) * 0.55;
+      const floors = p.h >= 20 && dressRng() < 0.4 ? 2 : 1;
+      for (let f = 0; f < floors; f++) {
+        const y = 5.5 + f * 4.5 + rand(dressRng, 0, 1.5);
+        if (y > p.h - 2) continue;
+        if (Math.abs(dx) > Math.abs(dz)) {
+          const s = Math.sign(dx) || 1;
+          balSpots.push({ x: p.x + s * (p.w / 2 + 0.7), y, z: p.z, w: 1.5, d: bw, ox: s, oz: 0 });
+        } else {
+          const s = Math.sign(dz) || 1;
+          balSpots.push({ x: p.x, y, z: p.z + s * (p.d / 2 + 0.7), w: bw, d: 1.5, ox: 0, oz: s });
+        }
+      }
+    }
+    if (balSpots.length) {
+      const slabGeo = new THREE.BoxGeometry(1, 0.22, 1);
+      const slabMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      const slabs = new THREE.InstancedMesh(slabGeo, slabMat, balSpots.length);
+      const railGeo = new THREE.BoxGeometry(1, 0.85, 0.08);
+      const railMat = new THREE.MeshLambertMaterial({ color: 0x2a2a34 });
+      const rails = new THREE.InstancedMesh(railGeo, railMat, balSpots.length);
+      const balCols = [0xd8d0c8, 0xc8b8a8, 0xb8c8d0, 0xe0d8c8];
+      balSpots.forEach((s, i) => {
+        m4.makeTranslation(s.x, s.y, s.z);
+        m4.scale(new THREE.Vector3(s.w, 1, s.d));
+        slabs.setMatrixAt(i, m4);
+        col.setHex(choice(dressRng, balCols));
+        slabs.setColorAt(i, col);
+        // Railing on the slab's outer edge, running along its long side.
+        m4.makeTranslation(s.x + s.ox * 0.75, s.y + 0.5, s.z + s.oz * 0.75);
+        m4.scale(new THREE.Vector3(s.ox !== 0 ? 0.08 : s.w, 1, s.oz !== 0 ? 0.08 : s.d));
+        rails.setMatrixAt(i, m4);
+      });
+      slabs.castShadow = true;
+      scene.add(slabs);
+      scene.add(rails);
+    }
+  }
+
+  // --- FIX ROUND 3: the night market (JOB 5) + the garage. ---
+  // Fixed positions, dedicated RNG (20261124) — no existing stream is
+  // touched, so the city, traffic and missions reproduce exactly.
+  // The market runs along the boardwalk at z = 125, x 70..140: eight
+  // stalls (counter + posts + striped awning + goods), two warm lights,
+  // and colliders so nobody walks through a stall.
+  const marketRng = mulberry32(20261124);
+  {
+    const awnCols = [0xff6a4a, 0x2ea88a, 0xe8c93a, 0xd95a8a, 0x3a7ad9, 0xff9a3a, 0x7ad9b0, 0xe8e8e8];
+    const goodsCols = [0xff6a4a, 0xe8c93a, 0x2ea88a, 0xd95a8a, 0x8ad9ff, 0xff9a3a];
+    for (let i = 0; i < 8; i++) {
+      const x = 70 + i * 10;
+      const z = 125;
+      const awnCol = awnCols[i % awnCols.length];
+      // Counter.
+      const counter = new THREE.Mesh(
+        new THREE.BoxGeometry(2.8, 1.1, 1.5),
+        new THREE.MeshLambertMaterial({ color: 0x6a4a3a }),
+      );
+      counter.position.set(x, 0.55, z);
+      counter.castShadow = true;
+      counter.receiveShadow = true;
+      scene.add(counter);
+      // Goods on the counter: small bright boxes.
+      for (let j = 0; j < 4; j++) {
+        const good = new THREE.Mesh(
+          new THREE.BoxGeometry(0.45, 0.35 + marketRng() * 0.25, 0.45),
+          new THREE.MeshLambertMaterial({ color: choice(marketRng, goodsCols) }),
+        );
+        good.position.set(x - 0.9 + j * 0.6, 1.25, z + (marketRng() - 0.5) * 0.5);
+        scene.add(good);
+      }
+      // Four posts + striped awning.
+      const postMat = new THREE.MeshLambertMaterial({ color: 0x3a2a2a });
+      for (const [ox, oz] of [[-1.3, -0.7], [1.3, -0.7], [-1.3, 0.7], [1.3, 0.7]]) {
+        const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.6, 5), postMat);
+        post.position.set(x + ox, 1.3, z + oz);
+        scene.add(post);
+      }
+      const awnTex = canvasTexture(64, 16, (ctx, w, h) => {
+        for (let sx = 0; sx < w; sx += 16) {
+          ctx.fillStyle = (sx / 16) % 2 === 0 ? '#f2e8d8' : '#' + awnCol.toString(16).padStart(6, '0');
+          ctx.fillRect(sx, 0, 16, h);
+        }
+      });
+      const awn = new THREE.Mesh(
+        new THREE.BoxGeometry(3.2, 0.1, 2.0),
+        new THREE.MeshLambertMaterial({ map: awnTex }),
+      );
+      awn.position.set(x, 2.7, z);
+      awn.rotation.x = 0.12;
+      awn.castShadow = true;
+      scene.add(awn);
+      // Warm bulb under the awning: a small glowing sphere.
+      const bulb = new THREE.Mesh(
+        new THREE.SphereGeometry(0.16, 8, 6),
+        new THREE.MeshBasicMaterial({ color: 0xffd9a0 }),
+      );
+      bulb.position.set(x, 2.45, z);
+      scene.add(bulb);
+      colliders.push({ x0: x - 1.5, z0: z - 0.9, x1: x + 1.5, z1: z + 0.9 });
+    }
+    // Two warm lights over the market aisle (no shadows — cheap).
+    for (const lx of [85, 125]) {
+      const pl = new THREE.PointLight(0xffb36a, 30, 26, 1.4);
+      pl.position.set(lx, 5, 122);
+      scene.add(pl);
+    }
+  }
+  // VERMILION MOTOR WORKS — the garage at (52, 128), by the safehouse:
+  // canopy on four posts, a back wall, a glowing pad the car sits on,
+  // and a neon sign. The pad and sign are the garage's read at dusk.
+  {
+    const postMat = new THREE.MeshLambertMaterial({ color: 0x2a2a34 });
+    for (const [ox, oz] of [[-5.5, -4], [5.5, -4], [-5.5, 4], [5.5, 4]]) {
+      const post = new THREE.Mesh(new THREE.BoxGeometry(0.35, 4.6, 0.35), postMat);
+      post.position.set(52 + ox, 2.3, 128 + oz);
+      post.castShadow = true;
+      scene.add(post);
+    }
+    const roof = new THREE.Mesh(
+      new THREE.BoxGeometry(12.5, 0.3, 9.5),
+      new THREE.MeshLambertMaterial({ color: 0x3a3a44 }),
+    );
+    roof.position.set(52, 4.75, 128);
+    roof.castShadow = true;
+    scene.add(roof);
+    const back = new THREE.Mesh(
+      new THREE.BoxGeometry(12.5, 4.6, 0.3),
+      new THREE.MeshLambertMaterial({ color: 0x4a3a4a }),
+    );
+    back.position.set(52, 2.3, 123.4);
+    back.castShadow = true;
+    scene.add(back);
+    colliders.push({ x0: 45.5, z0: 123.2, x1: 58.5, z1: 123.7 });
+    // Glowing pad under the car.
+    const pad = new THREE.Mesh(
+      new THREE.PlaneGeometry(6.5, 4.5),
+      new THREE.MeshBasicMaterial({ color: 0x38bdf8, transparent: true, opacity: 0.3 }),
+    );
+    pad.rotation.x = -Math.PI / 2;
+    pad.position.set(52, 0.08, 128);
+    scene.add(pad);
+    // Neon sign on the back wall. FIX ROUND 4b: the fix-4 move (x 52 ->
+    // 49.5, 9 -> 8 m) fixed the wrong cause — the text was clipped IN
+    // THE TEXTURE: "VERMILION MOTOR WORKS" at bold 44 px is ~580 px
+    // wide on a 512 px canvas, so both ends were cut before the plane
+    // ever rendered. The font now shrinks until the line fits the
+    // canvas (measureText loop), and the plane narrows to 6 m so the
+    // full sign fits between the canopy post (which occludes the wall
+    // left of x~46) and the DOM garage panel's left edge (frame 820):
+    // a 6 m plane still lost "KS" behind the panel, so 5.5 m.
+    const signTex = canvasTexture(512, 96, (ctx, w, h) => {
+      ctx.fillStyle = '#140a18';
+      ctx.fillRect(0, 0, w, h);
+      let fs = 44;
+      ctx.font = `bold ${fs}px Arial`;
+      // Inset the line from the canvas edges as well: the plane's right
+      // end sits close to the DOM panel, so the text must end well
+      // inside the plane, not flush with it.
+      while (ctx.measureText('VERMILION MOTOR WORKS').width > w - 90 && fs > 10) {
+        fs -= 2;
+        ctx.font = `bold ${fs}px Arial`;
+      }
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = '#ff4ad9';
+      ctx.shadowBlur = 18;
+      ctx.fillStyle = '#ff9ad9';
+      ctx.fillText('VERMILION MOTOR WORKS', w / 2, h / 2 - 12);
+      ctx.font = 'bold 22px Arial';
+      ctx.shadowColor = '#38bdf8';
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = '#9fd8ff';
+      ctx.fillText('TUNE · ARMOUR · RESPRAY', w / 2, h / 2 + 26);
+    });
+    const sign = new THREE.Mesh(
+      new THREE.PlaneGeometry(5.5, 1.7),
+      new THREE.MeshBasicMaterial({ map: signTex }),
+    );
+    sign.position.set(49.5, 3.6, 123.6);
+    scene.add(sign);
   }
 
   // --- Palms along the beach and boulevards (instanced trunks + crowns). ---

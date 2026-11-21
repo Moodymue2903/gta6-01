@@ -1,7 +1,7 @@
 // VERMILION KEYS — boot: renderer, wiring, fixed-60 Hz loop, state machine.
-// States: title -> playing <-> paused, dead, busted, shot (screenshot mode).
-// One-shot keys are handled once per rendered frame (never inside the sim
-// steps, so a press can never fire twice in one frame).
+// States: title -> playing <-> paused, dead, busted, shot (screenshot mode),
+// career, garage. One-shot keys are handled once per rendered frame (never
+// inside the sim steps, so a press can never fire twice in one frame).
 
 import * as THREE from 'three';
 import { mulberry32, clamp } from './util.js';
@@ -79,7 +79,16 @@ class Game {
     const s = this.city.spots.playerStart;
     this.starterCar = new Car(this, 'sports', 0xff6a4a, s.x + 6, s.z + 4, Math.PI / 2);
     this.starterCar.owned = true;
+    // FIX ROUND 3 (T7): restore the saved garage tune onto the player's
+    // own car. Progression loads the save before this car exists, so the
+    // tune can only be applied now — without it a bought upgrade vanished
+    // on reload while cash and missions survived.
+    this.progression.restoreTune();
     this.player.spawn(s.x, s.z, s.heading);
+
+    // FIX ROUND 3 — the garage mechanic: a static ped who never leaves
+    // the Motor Works. Beside the pad (west side), facing the car.
+    this.peds.spawnStatic(47.5, 128, Math.PI / 2);
 
     // Hero contact shadow: one dark ellipse on the surface below the
     // player (car or on foot). It grounds the hero, and on the cover
@@ -126,6 +135,8 @@ class Game {
     if (player.inCar) {
       const drive = this.scriptedDrive ?? input.driveInput();
       player.inCar.update(dt, drive);
+      // FIX ROUND 3 — the career ledger counts real distance driven.
+      this.progression.recordDistance(Math.abs(player.inCar.speed) * dt);
     } else {
       player.update(dt, input);
     }
@@ -268,10 +279,37 @@ class Game {
       }
       return;
     }
+    // FIX ROUND 3 — career screen (T): the sim pauses, the renderer
+    // keeps drawing behind the overlay.
+    if (st === 'career') {
+      if (input.pressed('KeyT') || input.pressed('Escape')) {
+        this.state = 'playing';
+        this.menus.hideCareer();
+      }
+      return;
+    }
+    // FIX ROUND 3 — garage screen (E at the garage): keys 1–5 buy.
+    if (st === 'garage') {
+      if (input.pressed('Escape')) {
+        this.state = 'playing';
+        this.menus.hideGarage();
+      } else if (input.pressed('Digit1')) this.menus.garageBuy(0);
+      else if (input.pressed('Digit2')) this.menus.garageBuy(1);
+      else if (input.pressed('Digit3')) this.menus.garageBuy(2);
+      else if (input.pressed('Digit4')) this.menus.garageBuy(3);
+      else if (input.pressed('Digit5')) this.menus.garageBuy(4);
+      return;
+    }
     if (st !== 'playing') return;
     if (input.pressed('Escape')) {
       this.state = 'paused';
       this.menus.showPause();
+      return;
+    }
+    // FIX ROUND 3 — T opens the career screen.
+    if (input.pressed('KeyT')) {
+      this.state = 'career';
+      this.menus.showCareer();
       return;
     }
     if (input.pressed('KeyE')) {
@@ -279,12 +317,15 @@ class Game {
         this.player.exitCar();
       } else {
         const nearStart = Math.hypot(this.player.pos.x - 60, this.player.pos.z - 138) < 7;
+        const nearGarage = Math.hypot(this.player.pos.x - 52, this.player.pos.z - 128) < 8;
         if (!this.missions.active && nearStart) {
           this.startNextMission();
+        } else if (nearGarage) {
+          // FIX ROUND 3 — E at the garage opens the Motor Works.
+          this.state = 'garage';
+          this.menus.showGarage();
         } else if (!this.enterNearestCar()) {
-          // Near the garage: store the car you arrived in.
-          const nearGarage = Math.hypot(this.player.pos.x - 52, this.player.pos.z - 128) < 8;
-          if (nearGarage) this.hud.setPrompt('No car in reach — garage stores the car you drive in.');
+          // Nothing in reach.
         }
       }
     }
@@ -305,7 +346,9 @@ class Game {
     if (!this.player.inCar) {
       const car = this.nearestCar(4.5);
       const nearStart = Math.hypot(this.player.pos.x - 60, this.player.pos.z - 138) < 7;
-      if (car) this.hud.setPrompt('E — STEAL ' + car.def.name.toUpperCase());
+      const nearGarage = Math.hypot(this.player.pos.x - 52, this.player.pos.z - 128) < 8;
+      if (nearGarage) this.hud.setPrompt('E — GARAGE');
+      else if (car) this.hud.setPrompt('E — STEAL ' + car.def.name.toUpperCase());
       else if (!this.missions.active && nearStart) this.hud.setPrompt('E — START JOB');
       else this.hud.setPrompt('');
     } else {

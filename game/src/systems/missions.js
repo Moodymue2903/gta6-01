@@ -1,7 +1,11 @@
 // VERMILION KEYS — missions: 8 story jobs, data-driven state machine.
 // Stage types: goto, chase, collect, survive, destroy, race, deliver,
-// escape. Each stage has text, a target, a radius and an optional timer;
-// the system runs the beacon, the dialogue and the pass/fail rules.
+// escape, fight. Each stage has text, a target, a radius and an optional
+// timer; the system runs the beacon, the dialogue and the pass/fail rules.
+// FIX ROUND 3 — JOB 5 is now MARKET CRACKDOWN, a real on-foot fight:
+// five syndicate guards at the night market, a live HOSTILES DOWN
+// counter, then secure the package. The old survive-and-wait job
+// (THE DROP) proved nothing on a screenshot.
 
 import * as THREE from 'three';
 import { Car } from '../entities/vehicle.js';
@@ -45,11 +49,12 @@ export const MISSIONS = [
     ],
   },
   {
-    id: 5, name: 'THE DROP', giver: 'Kiki', giverRole: 'LOOKOUT',
-    briefing: 'Kiki is making a drop on the boardwalk and the PD got tipped. Hold the spot for ninety seconds. Do not let them reach her.',
+    id: 5, name: 'MARKET CRACKDOWN', giver: 'Kiki', giverRole: 'LOOKOUT',
+    briefing: 'The syndicate runs the night market after dark. Clear their guards and secure the package — the PD will hear the shots.',
     reward: 1800, respect: 110,
     stages: [
-      { type: 'survive', text: 'Defend Kiki — hold the boardwalk', x: 100, z: 120, radius: 22, time: 90 },
+      { type: 'fight', text: 'Eliminate the syndicate guards', count: 5, time: 180 },
+      { type: 'goto', text: 'Secure the market package', x: 100, z: 122, radius: 5 },
     ],
   },
   {
@@ -84,6 +89,16 @@ export const MISSIONS = [
 const RACE_GATES = [
   { x: -70, z: 0 }, { x: -20, z: 0 }, { x: 60, z: 0 }, { x: 140, z: 0 },
   { x: 200, z: 110 }, { x: 140, z: 110 }, { x: 60, z: 110 }, { x: -20, z: 110 },
+];
+
+// Night-market guard posts (fixed, deterministic): three in the open
+// aisle, one crouched behind a stall, one at the far end.
+const MARKET_GUARDS = [
+  { x: 104, z: 119, cover: false },
+  { x: 110, z: 118, cover: false },
+  { x: 116, z: 120, cover: false },
+  { x: 100, z: 122, cover: true },
+  { x: 120, z: 121, cover: false },
 ];
 
 export class MissionSystem {
@@ -121,6 +136,7 @@ export class MissionSystem {
     if (!s) return '';
     if (s.type === 'race') return `Race the gates — ${8 - this.active.gate} of 8 left`;
     if (s.type === 'destroy' && s.count) return `${s.text} (${this.active.kills}/${s.count})`;
+    if (s.type === 'fight') return `${s.text} — ${this.active.kills}/${s.count} DOWN`;
     return s.text;
   }
 
@@ -131,6 +147,10 @@ export class MissionSystem {
     if (s.type === 'chase' && this.active.chaseCar) return { x: this.active.chaseCar.pos.x, z: this.active.chaseCar.pos.z };
     if (s.type === 'destroy' && this.active.targets?.length) {
       const t = this.active.targets.find((t) => !t.dead);
+      if (t) return { x: t.pos.x, z: t.pos.z };
+    }
+    if (s.type === 'fight' && this.active.guards?.length) {
+      const t = this.active.guards.find((p) => p.state !== 'down');
       if (t) return { x: t.pos.x, z: t.pos.z };
     }
     if (s.type === 'race') {
@@ -144,7 +164,7 @@ export class MissionSystem {
   start(id) {
     const def = MISSIONS.find((m) => m.id === id);
     if (!def || this.active) return false;
-    this.active = { def, stage: 0, timer: 0, gate: 0, kills: 0, chaseCar: null, targets: [], data: {} };
+    this.active = { def, stage: 0, timer: 0, gate: 0, kills: 0, chaseCar: null, targets: [], guards: [], data: {} };
     this.setupStage();
     this.game.hud?.showDialogue(def.giver, def.giverRole, def.briefing);
     this.game.hud?.banner('JOB ' + def.id + ' — ' + def.name, def.briefing);
@@ -173,6 +193,14 @@ export class MissionSystem {
         return car;
       });
       this.active.kills = 0;
+    }
+    if (s.type === 'fight') {
+      // Five syndicate guards at the night market. They hold their post
+      // and stay down when shot — the mission counts them.
+      this.active.guards = MARKET_GUARDS.map((p) => this.game.peds.spawnGuard(p.x, p.z, 0, p.cover));
+      this.active.kills = 0;
+      // The market is loud: the PD is already on its way.
+      this.game.police.addHeat(20, 'market crackdown');
     }
     if (s.type === 'survive') {
       // Kiki waits at the drop point; police waves come to her.
@@ -212,6 +240,7 @@ export class MissionSystem {
     this.game.progression.addCash(def.reward);
     this.game.progression.addRespect(def.respect);
     this.game.progression.missionsDone.add(def.id);
+    if (def.id === 7) this.game.progression.recordRaceWin();
     this.game.progression.save();
     this.teardown();
     this.game.hud?.banner('JOB COMPLETE — ' + def.name, `+$${def.reward}  •  +${def.respect} respect`);
@@ -222,6 +251,7 @@ export class MissionSystem {
   teardown() {
     if (this.active?.chaseCar) this.active.chaseCar.remove();
     if (this.active?.targets) for (const t of this.active.targets) t.remove();
+    if (this.active?.guards) for (const p of this.active.guards) this.game.peds.removePed(p);
     this.active = null;
     this.beacon.visible = false;
     this.marker.visible = false;
@@ -305,6 +335,13 @@ export class MissionSystem {
         else if (Math.floor(a.timer) % 20 === 0 && a.timer - dt < Math.floor(a.timer)) {
           this.game.police.spawnUnit('cruiser');
         }
+        break;
+      }
+      case 'fight': {
+        // Guards down count live; the stage clears when all five are down.
+        const down = this.active.guards.filter((p) => p.state === 'down').length;
+        this.active.kills = down;
+        if (s.count && down >= s.count) this.advance();
         break;
       }
       case 'destroy': {

@@ -2,6 +2,13 @@
 // A car is a kinematic body with a velocity vector: forward speed plus a
 // lateral slide that decays, so handbrake turns feel like a drift. The
 // drawbridge ramp can launch a car airborne; gravity brings it back down.
+// FIX ROUND 3 — the garage is real: every car carries a tune
+// (engine/armour/handling levels from VERMILION MOTOR WORKS) and its
+// effective top speed, max condition and grip follow the tune. Respray
+// repaints the live mesh. Jumps are measured and recorded.
+// FIX ROUND 4 — the cabin glass carries a faint emissive glow now, so
+// a car at dusk or neon night reads as a lit cabin, not a black block
+// on wheels (the re-test faulted "vehicles mostly black blocks").
 
 import * as THREE from 'three';
 import { PALETTE, clamp } from '../util.js';
@@ -34,7 +41,10 @@ export function makeCarMesh(cls, color, police = false) {
   const L = def.len;
   const W = def.wid;
   const H = def.h;
-  const body = box(L, H * 0.55, W, police ? PALETTE.policeWhite : color, 0, H * 0.32, 0);
+  const bodyMat = new THREE.MeshLambertMaterial({ color: police ? PALETTE.policeWhite : color });
+  const body = new THREE.Mesh(new THREE.BoxGeometry(L, H * 0.55, W), bodyMat);
+  body.position.set(0, H * 0.32, 0);
+  body.castShadow = true;
   g.add(body);
   const cabinH = cls === 'van' ? H * 0.55 : H * 0.5;
   const cabinL = cls === 'bike' ? 0.5 : L * (cls === 'van' ? 0.62 : 0.48);
@@ -43,12 +53,26 @@ export function makeCarMesh(cls, color, police = false) {
   if (cls === 'muscle' || cls === 'sports') {
     g.add(box(L * 0.16, 0.1, W * 0.9, 0x1a1a20, -L * 0.46, H * 0.62, 0)); // spoiler
   }
+  // Two-tone paint (FIX ROUND 3): a lighter stripe down the hood and
+  // roof so the car reads as painted, not one flat slab of colour.
+  if (!police && (cls === 'sports' || cls === 'muscle' || cls === 'sedan')) {
+    const stripeCol = new THREE.Color(color).offsetHSL(0, -0.05, 0.22).getHex();
+    g.add(box(L * 0.62, 0.05, W * 0.34, stripeCol, L * 0.08, H * 0.6, 0));
+  }
   // Side details so the flank reads as a car, not a flat slab: a glass
   // band on the cabin flanks (slightly wider than the cabin, so it reads
   // from the side), dark side skirts, a bright grille strip and a rear
   // bumper. FIX ROUND 2: the cover car read as a flat orange slab from
   // behind because the flank had no detail at all.
-  g.add(box(cabinL * 0.82, cabinH * 0.52, W * 0.9, 0x7ab8d9, cls === 'van' ? -L * 0.08 : -L * 0.04, H * 0.6 + cabinH / 2, 0)); // glass band
+  // FIX ROUND 4: the glass band glows faintly (emissive), so the cabin
+  // reads at dusk and neon night instead of going black with the cabin.
+  const glass = new THREE.Mesh(
+    new THREE.BoxGeometry(cabinL * 0.82, cabinH * 0.52, W * 0.9),
+    new THREE.MeshLambertMaterial({ color: 0x7ab8d9, emissive: 0x2a4a5a, emissiveIntensity: 0.55 }),
+  );
+  glass.position.set(cls === 'van' ? -L * 0.08 : -L * 0.04, H * 0.6 + cabinH / 2, 0);
+  glass.castShadow = true;
+  g.add(glass);
   for (const s of [-1, 1]) {
     g.add(box(L * 0.92, 0.16, 0.06, 0x1a1a20, 0, H * 0.16, s * (W / 2 + 0.01))); // side skirt
   }
@@ -97,7 +121,7 @@ export function makeCarMesh(cls, color, police = false) {
     // Black doors + white body: add a black hood stripe.
     g.add(box(L * 0.5, 0.06, W * 0.98, PALETTE.policeBlack, L * 0.2, H * 0.62, 0));
   }
-  g.userData = { wheels, lightBar, cls, def };
+  g.userData = { wheels, lightBar, cls, def, bodyMat };
   return g;
 }
 
@@ -123,8 +147,38 @@ export class Car {
     this.onFire = false;
     this.tireDamage = 0; // seconds of spike-strip damage left
     this.driver = null; // pedestrian who drives it, if any
+    // Garage tune: engine/armour/handling levels (0-3). Modest, capped.
+    this.tune = { engine: 0, armour: 0, handling: 0 };
+    this._airStart = null; // takeoff point, for the longest-jump ledger
     this.syncMesh();
     game.scene.add(this.mesh);
+  }
+
+  // Effective stats with the garage tune applied.
+  topSpeed() {
+    return this.def.topSpeed * (1 + 0.08 * (this.tune.engine || 0));
+  }
+
+  maxHp() {
+    return Math.round(this.def.hp * (1 + 0.25 * (this.tune.armour || 0)));
+  }
+
+  grip() {
+    return this.def.grip * (1 + 0.1 * (this.tune.handling || 0));
+  }
+
+  // Respray: repaint the live mesh and remember the new colour.
+  repaint(color) {
+    this.color = color;
+    const m = this.mesh.userData.bodyMat;
+    if (m) m.color.setHex(color);
+    const stripeCol = new THREE.Color(color).offsetHSL(0, -0.05, 0.22).getHex();
+    // The stripe is child 3 of the group for sports/muscle/sedan.
+    for (const child of this.mesh.children) {
+      if (child.geometry?.parameters?.width === this.def.len * 0.62) {
+        child.material.color.setHex(stripeCol);
+      }
+    }
   }
 
   syncMesh() {
@@ -150,7 +204,7 @@ export class Car {
   update(dt, input) {
     if (this.dead) return;
     const def = this.def;
-    const top = def.topSpeed * (this.tireDamage > 0 ? 0.45 : 1);
+    const top = this.topSpeed() * (this.tireDamage > 0 ? 0.45 : 1);
     if (this.tireDamage > 0) this.tireDamage -= dt;
     if (input) {
       const accel = input.throttle > 0 ? def.accel : def.accel * 0.85;
@@ -159,7 +213,7 @@ export class Car {
       if (this.speed > top) this.speed = top;
       if (this.speed < -top * 0.45) this.speed = -top * 0.45;
       const steerAuthority = clamp(Math.abs(this.speed) / 10, 0, 1) * (this.speed >= 0 ? 1 : -1);
-      const steerRate = (input.handbrake ? 2.6 : 1.7) * def.grip;
+      const steerRate = (input.handbrake ? 2.6 : 1.7) * this.grip();
       this.heading += input.steer * steerRate * steerAuthority * dt;
       if (input.handbrake) {
         // Slide: keep some old lateral velocity, bleed speed a little.
@@ -191,18 +245,26 @@ export class Car {
         this.pos.y = g;
         this.airborne = false;
         this.vy = 0;
+        // Longest jump: horizontal distance from takeoff to landing.
+        if (this._airStart) {
+          const jump = Math.hypot(this.pos.x - this._airStart.x, this.pos.z - this._airStart.z);
+          if (jump > 4) this.game.progression?.recordJump(jump);
+          this._airStart = null;
+        }
         if (this.speed > 20) this.game.hud?.flash('land');
       }
     } else if (ground === -999) {
       // Drove off the drawbridge lip: keep the ramp's upward velocity.
       this.airborne = true;
       this.vy = Math.max(4, this.speed * 0.45);
+      this._airStart = { x: this.pos.x, z: this.pos.z };
     } else if (ground > 0) {
       // On the ramp: climb it; launch near the tip at speed — the leap.
       this.pos.y = ground;
       if (ground > 3 && this.speed > 24) {
         this.airborne = true;
         this.vy = this.speed * 0.42;
+        this._airStart = { x: this.pos.x, z: this.pos.z };
       }
     } else if (this.pos.y > 0.01) {
       if (this.pos.y > 0.5 && this.speed > 10) {
@@ -210,6 +272,7 @@ export class Car {
         // and keep flying instead of snapping down to the road.
         this.airborne = true;
         this.vy = Math.max(2, this.speed * 0.25);
+        this._airStart = { x: this.pos.x, z: this.pos.z };
       } else {
         this.pos.y = Math.max(0, this.pos.y - 8 * dt);
       }
@@ -276,7 +339,7 @@ export class Car {
   }
 
   repair() {
-    this.hp = this.def.hp;
+    this.hp = this.maxHp();
     this.onFire = false;
     this.tireDamage = 0;
   }

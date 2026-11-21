@@ -55,6 +55,9 @@ export class Player {
     this.inCar = null; // Car instance or null
     this.walkPhase = 0;
     this.dead = false;
+    // FIX ROUND 3 — aim timer: combat.fire() sets this to 0.35 s; while
+    // it is > 0 the right arm holds the aim pose (gun out, arm raised).
+    this.aimT = 0;
     game.scene.add(this.mesh);
   }
 
@@ -137,6 +140,14 @@ export class Player {
         this.pos.x += (dx / d) * (r - d);
         this.pos.z += (dz / d) * (r - d);
       }
+    }
+    // FIX ROUND 3 — aim pose (runs last, so it wins over the walk swing
+    // and the idle decay): right arm raised FORWARD, gun out, while aimT
+    // runs. Positive rotation.x swings the arm toward the player's front
+    // (local +Z); the old -1.3 pointed it backward, behind the player.
+    if (this.aimT > 0) {
+      this.aimT -= dt;
+      this.mesh.userData.armR.rotation.x = 1.3;
     }
     this.syncMesh();
   }

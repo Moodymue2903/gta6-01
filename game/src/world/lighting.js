@@ -73,12 +73,16 @@ const PRESETS = {
   // Lifted to moonlight + city-glow levels (sun 2.0, hemi 1.05,
   // fill 0.95) so the cars and road read while the sky stays dark
   // violet — night, but legible.
+  // FIX ROUND 4: the re-test still called the night frames "dark and
+  // murky" (C4 0-4). Lifted again (sun 2.4, hemi 1.35, fill 1.2,
+  // exposure 1.3) — the sky stays dark violet, but the market, the
+  // guards and the stalls now sit in city glow instead of mud.
   neon: {
-    sunDir: [0.2, 0.35, 0.6], sunColor: 0x8a9fff, sunIntensity: 2.0,
+    sunDir: [0.2, 0.35, 0.6], sunColor: 0x8a9fff, sunIntensity: 2.4,
     skyTop: 0x0a0a2a, skyMid: 0x3a2a6a, skyHorizon: 0x8a4a8a, sunGlow: 0xc0d0ff,
-    fog: 0x2a1a4a, hemiSky: 0x2a3a6a, hemiGround: 0x1a1a2a, hemiIntensity: 1.05,
-    rimColor: 0x6a8aff, rimIntensity: 0.9, fillColor: 0x8a7aff, fillIntensity: 0.95,
-    cloud: 0x3a2a55, exposure: 1.25,
+    fog: 0x2a1a4a, hemiSky: 0x2a3a6a, hemiGround: 0x1a1a2a, hemiIntensity: 1.35,
+    rimColor: 0x6a8aff, rimIntensity: 0.9, fillColor: 0x8a7aff, fillIntensity: 1.2,
+    cloud: 0x3a2a55, exposure: 1.3,
   },
 };
 

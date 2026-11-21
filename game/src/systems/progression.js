@@ -1,6 +1,13 @@
 // VERMILION KEYS — progression: cash, respect ranks, garage, saves.
 // Crew perks run on cooldowns: Mira swaps plates (drops heat), Lo fixes
 // the car, Kiki reveals every police unit on the minimap.
+// FIX ROUND 3 — the career is a real ledger, not a number:
+//   * career stats (cars stolen, escapes, distance, takedowns, jumps,
+//     races won, highest wanted) are recorded by the systems that earn
+//     them and read by the career screen — never typed into the DOM.
+//   * three real save slots (save/load/summary), each a full state.
+//   * garage upgrades are real purchases: check cash -> deduct -> apply
+//     to the car's tune -> save. Multipliers are modest and capped.
 
 const SAVE_KEY = 'vk-save-v1';
 
@@ -21,6 +28,19 @@ export const CREW = {
   kiki: { name: 'Kiki', role: 'LOOKOUT', key: 'C', cooldown: 90, desc: 'Eyes out — reveals all police for 20s' },
 };
 
+// VERMILION MOTOR WORKS — the garage price list. Upgrades apply to the
+// car you arrived in; respray also clears unseen Heat (a fresh coat
+// and new plates make the car a different car to the cameras).
+export const UPGRADES = [
+  { id: 'engine', name: 'Engine tune', price: 4000, desc: '+8% top speed', max: 3 },
+  { id: 'armour', name: 'Reinforced armour', price: 3000, desc: '+25% max condition', max: 3 },
+  { id: 'handling', name: 'Handling package', price: 2500, desc: '+10% grip', max: 3 },
+  { id: 'respray', name: 'Respray', price: 450, desc: 'New paint — clears unseen Heat', max: 99 },
+  { id: 'repair', name: 'Repair', price: 300, desc: 'Restore condition to full', max: 99 },
+];
+
+const PAINTS = [0xff6a4a, 0x3a7ad9, 0xe8c93a, 0x2ea88a, 0xd97bd9, 0xe8e8e8, 0xd97b2e, 0x8a6ad9];
+
 export class Progression {
   constructor(game) {
     this.game = game;
@@ -30,6 +50,20 @@ export class Progression {
     this.ownedCars = []; // {cls, color} stored at the garage
     this.crewUsed = { mira: -999, lo: -999, kiki: -999 };
     this.revealUntil = 0;
+    // Tune from the save, held until the starter car exists — see
+    // restoreTune(). The tune lives on the car in memory, so the save
+    // has to carry it and the Game has to apply it after the car is built.
+    this._savedTune = null;
+    // Career ledger — every counter is written by the system that earns it.
+    this.career = {
+      carsStolen: 0,
+      copsEscaped: 0,
+      distanceDriven: 0, // metres
+      peopleTakenOut: 0,
+      longestJump: 0, // metres
+      racesWon: 0,
+      highestWanted: 0,
+    };
     this.load();
   }
 
@@ -60,6 +94,19 @@ export class Progression {
       this.game.hud?.banner('RANK UP — ' + RANKS[this.rank].name, 'The Keys know your name now.');
       this.game.audio?.blip('rank');
     }
+  }
+
+  // --- Career ledger (called by the systems that earn each stat). ---
+  recordCarStolen() { this.career.carsStolen++; }
+  recordEscape() { this.career.copsEscaped++; }
+  recordDistance(m) { this.career.distanceDriven += m; }
+  recordTakedown() { this.career.peopleTakenOut++; }
+  recordRaceWin() { this.career.racesWon++; }
+  recordJump(m) {
+    if (m > this.career.longestJump) this.career.longestJump = m;
+  }
+  noteWanted(stars) {
+    if (stars > this.career.highestWanted) this.career.highestWanted = stars;
   }
 
   crewReady(id) {
@@ -97,30 +144,127 @@ export class Progression {
     return true;
   }
 
-  save() {
+  // --- Garage: real purchases against the car you arrived in. ---
+  garageCar() {
+    return this.game.player.inCar || this.game.starterCar;
+  }
+
+  upgradeLevel(id) {
+    const car = this.garageCar();
+    if (!car || !car.tune) return 0;
+    if (id === 'respray' || id === 'repair') return 0;
+    return car.tune[id] || 0;
+  }
+
+  buyUpgrade(id) {
+    const def = UPGRADES.find((u) => u.id === id);
+    const car = this.garageCar();
+    if (!def || !car) return { ok: false, why: 'No car at the garage.' };
+    if (this.cash < def.price) return { ok: false, why: 'Not enough cash.' };
+    if (id !== 'respray' && id !== 'repair' && (car.tune[id] || 0) >= def.max) {
+      return { ok: false, why: 'Already maxed.' };
+    }
+    this.cash -= def.price;
+    if (id === 'engine') car.tune.engine = (car.tune.engine || 0) + 1;
+    else if (id === 'armour') {
+      car.tune.armour = (car.tune.armour || 0) + 1;
+      car.hp = car.maxHp();
+    } else if (id === 'handling') car.tune.handling = (car.tune.handling || 0) + 1;
+    else if (id === 'respray') {
+      // Next paint in the rotation, applied to the live mesh, and the
+      // unseen Heat is wiped — the cameras are looking for another car.
+      const cur = PAINTS.indexOf(car.color);
+      const next = PAINTS[(cur + 1) % PAINTS.length];
+      car.repaint(next);
+      this.game.police.clearHeat();
+      this.game.police.known = false;
+      this.game.police.starState = 'none';
+    } else if (id === 'repair') {
+      car.repair();
+    }
+    this.save();
+    this.game.audio?.blip('pass');
+    return { ok: true, why: def.name + ' installed.' };
+  }
+
+  // --- Saves: three real slots. Slot 1 is the default (legacy key). ---
+  stateObject() {
+    return {
+      cash: this.cash,
+      respect: this.respect,
+      missionsDone: [...this.missionsDone],
+      ownedCars: this.ownedCars,
+      career: { ...this.career },
+      // FIX ROUND 3 (T7): the garage tune is persisted with the save.
+      // Before this, the tune lived only on the car in memory — cash,
+      // missions and rank survived a reload, but a bought upgrade
+      // vanished. The tune saved is the player's own car (starterCar);
+      // a tune bought on a stolen car dies with that car, as the car
+      // itself does.
+      tune: { ...(this.game.starterCar?.tune || this._savedTune || { engine: 0, armour: 0, handling: 0 }) },
+    };
+  }
+
+  applyState(s) {
+    if (!s) return;
+    this.cash = s.cash ?? this.cash;
+    this.respect = s.respect ?? 0;
+    this.missionsDone = new Set(s.missionsDone ?? []);
+    this.ownedCars = s.ownedCars ?? [];
+    this.career = { ...(this.career || {}), ...(s.career ?? {}) };
+    this._savedTune = s.tune
+      ? { engine: s.tune.engine || 0, armour: s.tune.armour || 0, handling: s.tune.handling || 0 }
+      : null;
+  }
+
+  // Restore the saved garage tune onto the player's own car. Called once
+  // from the Game constructor, after the starter car exists — Progression
+  // loads the save before the car is built, so the tune can only be
+  // applied here. Clears the held tune so it never applies twice.
+  restoreTune() {
+    if (!this._savedTune || !this.game.starterCar) return;
+    Object.assign(this.game.starterCar.tune, this._savedTune);
+    this._savedTune = null;
+  }
+
+  save(slot = 1) {
     try {
-      localStorage.setItem(SAVE_KEY, JSON.stringify({
-        cash: this.cash,
-        respect: this.respect,
-        missionsDone: [...this.missionsDone],
-        ownedCars: this.ownedCars,
-      }));
+      localStorage.setItem(SAVE_KEY + '-slot' + slot, JSON.stringify(this.stateObject()));
+      if (slot === 1) localStorage.setItem(SAVE_KEY, JSON.stringify(this.stateObject()));
     } catch (e) {
       // Storage may be unavailable in a sandbox; the game still runs.
     }
   }
 
-  load() {
+  load(slot = 1) {
     try {
-      const raw = localStorage.getItem(SAVE_KEY);
+      const raw = localStorage.getItem(SAVE_KEY + '-slot' + slot)
+        || (slot === 1 ? localStorage.getItem(SAVE_KEY) : null);
       if (!raw) return;
-      const s = JSON.parse(raw);
-      this.cash = s.cash ?? this.cash;
-      this.respect = s.respect ?? 0;
-      this.missionsDone = new Set(s.missionsDone ?? []);
-      this.ownedCars = s.ownedCars ?? [];
+      this.applyState(JSON.parse(raw));
     } catch (e) {
       // Corrupt or missing save: start fresh.
+    }
+  }
+
+  // Summary for the career screen's save-slot panel (null = empty slot).
+  slotSummary(slot) {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY + '-slot' + slot)
+        || (slot === 1 ? localStorage.getItem(SAVE_KEY) : null);
+      if (!raw) return null;
+      const s = JSON.parse(raw);
+      const respect = s.respect ?? 0;
+      let rankName = 'ROOKIE';
+      for (const r of RANKS) if (respect >= r.need) rankName = r.name;
+      return {
+        missions: (s.missionsDone ?? []).length,
+        cash: s.cash ?? 0,
+        rankName,
+        jobName: (s.missionsDone ?? []).length >= 8 ? 'Kingpin' : 'Market Crackdown',
+      };
+    } catch (e) {
+      return null;
     }
   }
 
@@ -129,8 +273,15 @@ export class Progression {
     this.respect = 0;
     this.missionsDone = new Set();
     this.ownedCars = [];
+    this._savedTune = null;
+    if (this.game.starterCar) this.game.starterCar.tune = { engine: 0, armour: 0, handling: 0 };
+    this.career = {
+      carsStolen: 0, copsEscaped: 0, distanceDriven: 0,
+      peopleTakenOut: 0, longestJump: 0, racesWon: 0, highestWanted: 0,
+    };
     try {
       localStorage.removeItem(SAVE_KEY);
+      for (let i = 1; i <= 3; i++) localStorage.removeItem(SAVE_KEY + '-slot' + i);
     } catch (e) { /* ignore */ }
   }
 }

@@ -1,6 +1,16 @@
 // VERMILION KEYS — police: 5-star wanted system, dispatch, roadblocks,
 // spike strips, SWAT vans and the helicopter with its searchlight cone.
 // Heat rises with crime and only decays once no unit can see the player.
+// FIX ROUND 3 — the wanted level is witness-driven, like the real GTA 6:
+//   * a crime nobody sees creates lingering Heat, not instant stars.
+//   * a witness (phone up, 2 s) reports it: stars appear GREY (reported,
+//     police heading to the scene), turn WHITE when units are dispatched,
+//     turn RED when a unit has eyes on you.
+//   * police have roles, not a single chase: Pursuit, Flanker (cuts to a
+//     predicted interception point, P + V x 2.5, via the road graph),
+//     Roadblock (two cruisers across the road + spike strip).
+//   * spike strips deflate tires on contact; the scanner ticker narrates
+//     it all with real dispatch strings.
 
 import * as THREE from 'three';
 import { Car } from './vehicle.js';
@@ -145,20 +155,75 @@ export class Police {
     this.roadblock = null; // {x, z, strip, cars}
     this.swat = [];
     this._unitSeq = 0;
+    // FIX ROUND 3 — witness-driven wanted state.
+    this.known = false; // the police have been told about you
+    this.starState = 'none'; // none | grey (reported) | white (acknowledged) | red (engaged)
+    this._greyT = 0;
+    this.scanner = []; // newest-first dispatch strings for the HUD ticker
+    this._stripCooldown = 0;
+    this._prevStars = 0;
   }
 
   get wanted() {
     return this.stars > 0;
   }
 
-  addHeat(n, _reason) {
+  // Line of sight between two ground points: blocked if the segment
+  // crosses a building collider (sampled). Cheap, deterministic.
+  hasLOS(x1, z1, x2, z2) {
+    for (let i = 1; i < 10; i++) {
+      const t = i / 10;
+      const x = x1 + (x2 - x1) * t;
+      const z = z1 + (z2 - z1) * t;
+      for (const c of this.game.city.colliders) {
+        if (x >= c.x0 && x <= c.x1 && z >= c.z0 && z <= c.z1) return false;
+      }
+    }
+    return true;
+  }
+
+  pushScanner(text) {
+    this.scanner.unshift(text);
+    if (this.scanner.length > 4) this.scanner.length = 4;
+  }
+
+  // A crime at (x, z): the nearest civilian who can see it becomes a
+  // witness (phone up, 2 s). A crime nobody sees adds lingering Heat
+  // only — no stars, no dispatch. Called by combat.fire() and car hits.
+  reportCrime(x, z, type) {
+    const w = this.game.peds.findWitness(x, z);
+    if (!w) {
+      this.addHeat(5, type, { reported: false });
+      return;
+    }
+    w.state = 'witness';
+    w.reportTimer = 2.0;
+    w.witnessCrime = type;
+    this.pushScanner('Witness on the phone — possible ' + type + '.');
+  }
+
+  // A witness finished their call: the police are told.
+  witnessReported(ped) {
+    this.addHeat(25, ped.witnessCrime || 'crime reported');
+    this.pushScanner('Civilian reported a crime — all units respond.');
+    this.game.audio?.blip('mission');
+  }
+
+  addHeat(n, _reason, opts = {}) {
     this.heat = clamp(this.heat + n, 0, 100);
     this.stars = this.heat <= 0 ? 0 : Math.min(5, Math.ceil(this.heat / 20));
+    if (opts.reported !== false && this.stars > 0) {
+      this.known = true;
+      if (this.starState === 'none') this.starState = 'grey';
+    }
+    this.game.progression?.noteWanted(this.stars);
   }
 
   clearHeat() {
     this.heat = 0;
     this.stars = 0;
+    this.known = false;
+    this.starState = 'none';
   }
 
   spawnUnit(kind) {
@@ -175,6 +240,7 @@ export class Police {
       state: 'pursue',
       kind,
       blockTarget: null,
+      flankTarget: null,
       ramCooldown: 0,
     };
     this.units.push(car);
@@ -210,10 +276,33 @@ export class Police {
     const pPos = player.inCar ? player.inCar.pos : player.pos;
     const pSpeed = player.inCar ? Math.abs(player.inCar.speed) : 0;
 
-    // Desired force by stars.
-    const wantCruisers = this.stars === 0 ? 0 : Math.min(MAX_UNITS, this.stars + 1);
-    const wantSwat = this.stars >= 4 ? Math.min(2, this.stars - 3) : 0;
-    const wantHeli = this.stars >= 4;
+    // Star states: grey (reported) -> white (units dispatched, 4 s) ->
+    // red (a unit has eyes on you). Heat at zero clears everything.
+    if (this.heat <= 0) {
+      if (this._prevStars > 0) this.game.progression?.recordEscape();
+      this.known = false;
+      this.starState = 'none';
+      this._greyT = 0;
+    } else if (this.known && this.starState === 'grey') {
+      this._greyT += dt;
+      if (this._greyT > 4) this.starState = 'white';
+    }
+    if (this.known) {
+      for (const u of this.units) {
+        const d = Math.hypot(u.pos.x - pPos.x, u.pos.z - pPos.z);
+        if (d < 45 && this.hasLOS(u.pos.x, u.pos.z, pPos.x, pPos.z)) {
+          this.starState = 'red';
+          break;
+        }
+      }
+    }
+    this._prevStars = this.stars;
+
+    // Desired force by stars — but only once the police KNOW. An unseen
+    // crime (heat, no report) dispatches nobody.
+    const wantCruisers = !this.known ? 0 : this.stars === 0 ? 0 : Math.min(MAX_UNITS, this.stars + 1);
+    const wantSwat = !this.known ? 0 : this.stars >= 4 ? Math.min(2, this.stars - 3) : 0;
+    const wantHeli = this.known && this.stars >= 4;
     while (this.units.filter((u) => u.unit.kind === 'cruiser').length < wantCruisers) this.spawnUnit('cruiser');
     while (this.units.filter((u) => u.unit.kind === 'swat').length < wantSwat) this.spawnUnit('swat');
     if (wantHeli && !this.heli) this.spawnHeli();
@@ -245,7 +334,7 @@ export class Police {
     }
 
     // Roadblocks at 3+ stars: two cruisers across the road ahead.
-    if (this.stars >= 3 && !this.roadblock && pSpeed > 12) {
+    if (this.stars >= 3 && this.known && !this.roadblock && pSpeed > 12) {
       this.makeRoadblock();
     }
     if (this.roadblock) {
@@ -253,6 +342,18 @@ export class Police {
       rb.timer -= dt;
       if (rb.timer <= 0 || Math.hypot(rb.x - pPos.x, rb.z - pPos.z) > 220) {
         this.clearRoadblock();
+      }
+    }
+
+    // Spike strip: drive over it and the tires go down.
+    this._stripCooldown = Math.max(0, this._stripCooldown - dt);
+    if (this.roadblock && player.inCar && this._stripCooldown <= 0) {
+      const sp = this.roadblock.strip.position;
+      if (Math.hypot(player.inCar.pos.x - sp.x, player.inCar.pos.z - sp.z) < 5 && pSpeed > 5) {
+        player.inCar.tireDamage = 8;
+        this._stripCooldown = 5;
+        this.pushScanner('Unit 12: spike strip hit — suspect tires down.');
+        this.game.audio?.blip('crash');
       }
     }
 
@@ -280,15 +381,20 @@ export class Police {
         if (dh < -Math.PI) dh += Math.PI * 2;
         steer = clamp(dh * 1.8, -1, 1);
         throttle = d > 6 ? 1 : 0.7;
-        if (this.stars >= 3 && unit.state !== 'block' && d > 40 && this.game.rng() < dt * 0.1) {
-          unit.state = 'block';
-          unit.blockTarget = { x: pPos.x, z: pPos.z };
+        // Flanker: cut to where the player WILL be (P + V x 2.5, snapped
+        // to the road graph), not where they are. gta7-style intercept.
+        if (this.stars >= 3 && unit.state !== 'flank' && d > 40 && this.game.rng() < dt * 0.1) {
+          const pvx = player.inCar ? Math.sin(player.inCar.heading) * player.inCar.speed : 0;
+          const pvz = player.inCar ? Math.cos(player.inCar.heading) * player.inCar.speed : 0;
+          const pred = nearestRoadPoint(pPos.x + pvx * 2.5, pPos.z + pvz * 2.5);
+          unit.state = 'flank';
+          unit.flankTarget = { x: pred.x, z: pred.z };
         }
-        if (unit.state === 'block') {
-          // Cut ahead of the player and turn across the road.
-          const bt = unit.blockTarget;
+        if (unit.state === 'flank') {
+          // Drive to the predicted point, then turn across the road.
+          const bt = unit.flankTarget;
           const bd = Math.hypot(u.pos.x - bt.x, u.pos.z - bt.z);
-          if (bd < 8) {
+          if (bd < 10) {
             unit.state = 'roadblock';
             u.heading += Math.PI / 2;
           } else {
@@ -383,7 +489,7 @@ export class Police {
     const cars = [];
     for (const s of [-1, 1]) {
       const car = new Car(this.game, 'sedan', 0xf2f2f2, near.x + px * 3.4 * s, near.z + pz * 3.4 * s, heading + Math.PI / 2, true);
-      car.unit = { name: 'ROADBLOCK', state: 'roadblock', kind: 'cruiser', blockTarget: null, ramCooldown: 0 };
+      car.unit = { name: 'ROADBLOCK', state: 'roadblock', kind: 'cruiser', blockTarget: null, flankTarget: null, ramCooldown: 0 };
       this.units.push(car);
       cars.push(car);
     }
@@ -396,6 +502,7 @@ export class Police {
     strip.rotation.y = heading;
     this.game.scene.add(strip);
     this.roadblock = { x: near.x, z: near.z, strip, cars, timer: 25, heading };
+    this.pushScanner('Unit 12: suspect heading east — set the strip.');
   }
 
   clearRoadblock() {
@@ -422,7 +529,7 @@ export class Police {
     return this.units.map((u) => ({
       name: u.unit.name,
       dist: Math.round(Math.hypot(u.pos.x - pPos.x, u.pos.z - pPos.z)),
-      state: u.unit.state === 'roadblock' ? 'ROADBLOCK' : u.unit.state === 'block' ? 'FLANKING' : u.unit.kind === 'swat' ? 'SWAT' : 'RAMMING',
+      state: u.unit.state === 'roadblock' ? 'ROADBLOCK' : u.unit.state === 'flank' ? 'FLANKING' : u.unit.kind === 'swat' ? 'SWAT' : 'RAMMING',
     }));
   }
 }

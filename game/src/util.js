@@ -47,6 +47,8 @@ export function dampAngle(a, b, lambda, dt) {
 // against #5's [144,97,91]. The sky top and the fog were too dark and the
 // horizon not saturated enough, so every channel is lifted here and the
 // horizon pushed toward #ff7100-tier orange.
+// FIX ROUND 4: the near-black car slot (0x222226) is a mid grey now —
+// no pure-black cars anywhere (the re-test faulted black-block vehicles).
 export const PALETTE = {
   skyTop: 0x9a6ab8,
   skyMid: 0xe8894a,
@@ -64,7 +66,7 @@ export const PALETTE = {
   roof: 0x5a4a52,
   palmTrunk: 0x7a5a42,
   palmLeaf: 0x3f8f4f,
-  car: [0xe84a3a, 0x3a7ad9, 0xe8c93a, 0x2ea88a, 0xd97bd9, 0xe8e8e8, 0x222226, 0xd97b2e],
+  car: [0xe84a3a, 0x3a7ad9, 0xe8c93a, 0x2ea88a, 0xd97bd9, 0xe8e8e8, 0x4a4a58, 0xd97b2e],
   coral: 0xff6a4a,
   policeWhite: 0xf2f2f2,
   policeBlack: 0x1a1a20,

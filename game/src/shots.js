@@ -1,8 +1,27 @@
-// VERMILION KEYS — screenshot staging: ?shot=cover|foot|police|mission.
+// VERMILION KEYS — screenshot staging: ?shot=cover|combat|career|garage.
 // Each shot composes a deterministic scene from the live engine (scripted
 // entity placement + a fixed number of fixed-timestep ticks), positions
 // the camera, then freezes the sim and raises window.__shotReady so the
 // screenshot driver can capture a real render — never a composite.
+//
+// FIX ROUND 3 — the four frames are the four verbs, matched to #1's
+// coverage and beating it on the fourth:
+//   1. cover — THE CAUSEWAY INTERCEPT: the leap, now a roadblock
+//      interception (roadblock below the landing, an interceptor
+//      chasing from behind, a braking civilian, fleeing peds).
+//   2. combat — THE GUNFIGHT: JOB 5 at the night market, 3 of 5 guards
+//      already down, a witness on the phone, cruisers converging, the
+//      player firing the MAKO SMG as the frame freezes.
+//   3. career — THE EMPIRE: the career screen over dusk, late-game state
+//      staged through the real mission/save APIs, three save slots.
+//   4. garage — THE REWARD: the Motor Works at dusk, the car on the pad
+//      with a real engine tune bought, the garage screen open.
+// FIX ROUND 4 — the gunfight must be VISIBLE: the player fires a burst
+// of three shots (ticks 147/148/149) so three tracers are fresh at the
+// freeze, the downed guards are laid out with downBody() (pale shirts,
+// blood pools, dropped guns), and the market holds ten fleeing
+// civilians instead of six. The cover gets three braking cars near the
+// roadblock and six bolting peds instead of three.
 
 import * as THREE from 'three';
 import { Car } from './entities/vehicle.js';
@@ -23,7 +42,7 @@ export function stageShot(kind, game) {
   if (kind === 'cover') {
     // THE LEAP, westbound into the sunset: coral supercar airborne over
     // the raised drawbridge, helicopter searchlight cone diagonal across
-    // the frame, roadblock behind, full HUD.
+    // the frame, roadblock below the landing, full HUD.
     // FIX ROUND 2: golden hour (bright, saturated — the fix-1 brightness
     // win is kept: cover R ~147). Each shot gets its OWN time of day.
     g.lighting.setTimeOfDay('golden');
@@ -44,12 +63,40 @@ export function stageShot(kind, game) {
     car.speed = 30;
     g.player.enterCar(car);
     g.player.pos.set(270, 0, 0);
-    // Two roadblock cruisers behind the leap (east, on the port side).
+    // FIX ROUND 3 — the roadblock is BELOW THE LANDING now (x 228,
+    // across the road, head-on to the incoming hero): the leap IS the
+    // interception. The old spot (x 284, behind the hero) read as two
+    // more chasers, not a block.
     for (const s of [-1, 1]) {
-      const rb = new Car(g, 'sedan', 0xf2f2f2, 284, s * 3.4, -Math.PI / 2, true);
+      const rb = new Car(g, 'sedan', 0xf2f2f2, 228, s * 3.4, Math.PI / 2, true);
       rb.unit = { name: 'ROADBLOCK', state: 'roadblock', kind: 'cruiser', blockTarget: null, ramCooldown: 0 };
-      rb.speed = 22;
+      rb.speed = 0;
       g.police.units.push(rb);
+    }
+    // FIX ROUND 3 — an interceptor chasing from behind (x 285), so the
+    // frame reads pursuit on both sides of the leap.
+    const chaser = new Car(g, 'sedan', 0xf2f2f2, 285, 0, -Math.PI / 2, true);
+    chaser.unit = { name: 'INTERCEPTOR', state: 'pursue', kind: 'cruiser', blockTarget: null, ramCooldown: 0 };
+    chaser.speed = 26;
+    g.police.units.push(chaser);
+    // FIX ROUND 3 — a braking civilian on the causeway approach and
+    // three fleeing peds on the sidewalk: the bridge is a street, not
+    // an empty set.
+    // FIX ROUND 4 — three braking civilians now, and six bolting peds:
+    // the re-test faulted "nearly empty streets" on the cover.
+    g.traffic.placeNear(278, 0, 3);
+    for (let i = 0; i < 3; i++) {
+      const p = g.peds.peds[i];
+      p.pos.set(254 + i * 4, 0, i % 2 === 0 ? 6 : -6);
+      p.state = 'flee';
+      p.fleeT = 3;
+    }
+    const extraFlee = [[246, 6], [250, -6], [266, 6]];
+    for (let i = 0; i < 3; i++) {
+      const p = g.peds.peds[3 + i];
+      p.pos.set(extraFlee[i][0], 0, extraFlee[i][1]);
+      p.state = 'flee';
+      p.fleeT = 3;
     }
     // Run the sim: the car climbs the west leaf and launches. Freeze
     // just after takeoff, while it is still RISING (vy > 0, so the pitch
@@ -135,140 +182,207 @@ export function stageShot(kind, game) {
     // always in the HUD) already shows all four weapons, as in fix 1.
     // showWeaponWheel() stays for the live game only.
     g.hud.showDialogue('Marco', 'SYNDICATE', 'The bridge is up — leap it, or the Keys eat you!');
-  } else if (kind === 'foot') {
-    // ON FOOT: boardwalk crowd, carjacking in progress.
-    // FIX ROUND 2: bright daylight (blue sky, teal water, high sun) —
-    // #5 varies the time of day across frames; ours was the same flat
-    // orange sky in all four. And mid/late-game staging: the first foot
-    // frame showed ROOKIE / $250. Now HUSTLER 520/700, $4,050.
-    g.lighting.setTimeOfDay('day');
-    g.progression.addCash(3800);
-    g.progression.addRespect(520);
-    // RE-AUTHOR FIX: the foot frame showed "JOB 1 / 0/8 JOBS DONE" next
-    // to HUSTLER / $4,050 — the card said no job had ever been done
-    // while the rank said mid-game. Start JOB 1 (BAGMAN) so the card
-    // shows a live job with its real objective and stage counter. The
-    // goto target is the marina (off-frame; its beacon never enters
-    // the shot), the minimap gains a gold target diamond, and no extra
-    // entity spawns (a goto stage spawns nothing). The mission banner
-    // is cleared at the end of stageShot and the Mira dialogue below
-    // overwrites the briefing.
-    g.missions.start(1);
-    g.player.spawn(100, 122, Math.PI * 0.6);
-    const target = new Car(g, 'sedan', 0xe8c93a, 104, 119, Math.PI * 0.5);
-    target.speed = 0;
-    g.traffic.cars.push(target);
-    // A fleeing pedestrian and a busy crowd around the player.
-    for (let i = 0; i < 10; i++) {
+  } else if (kind === 'combat') {
+    // THE GUNFIGHT: JOB 5 MARKET CRACKDOWN at the night market, neon
+    // night (20:15). The player is on foot behind the stalls, the MAKO
+    // SMG out, three guards already down and two still up in the aisle.
+    g.lighting.setTimeOfDay('neon');
+    g.missions.start(5);
+    // FIX ROUND 3: JOB 5 implies four jobs done — stage the matching
+    // mid-game state ($5,250 = 250 + 800 + 1200 + 1000 + 2000; respect
+    // 330 = 60 + 80 + 80 + 110), not the fresh-game $250 / ROOKIE.
+    g.progression.addCash(5000);
+    g.progression.addRespect(330);
+    // Stage the fight: 3 of the 5 guards already down. Their state is
+    // set directly (the mission counter reads state === 'down', so the
+    // card shows 3/5 DOWN) — a live knockDown would add 15 heat each
+    // and push the shot to 5 stars before the witness even calls.
+    // FIX ROUND 4: downBody() lays them out as visible bodies (pale
+    // shirt, blood pool, dropped gun) instead of dark-on-dark debris.
+    const guards = g.missions.active.guards;
+    // FIX ROUND 4b: lay the three downed guards out in the OPEN
+    // foreground aisle around the player (3-5 m out), not at their
+    // market posts where the stall counters hide them from this camera.
+    // downBody() does not move the mesh, so set pos AND mesh position
+    // before laying each one out.
+    const downSpots = [[107, 122], [100, 123], [113, 122]];
+    [0, 3, 4].forEach((idx, k) => {
+      const gd = guards[idx];
+      gd.pos.set(downSpots[k][0], 0, downSpots[k][1]);
+      gd.mesh.position.set(downSpots[k][0], 0, downSpots[k][1]);
+      g.peds.downBody(gd);
+    });
+    // Player on foot behind the stalls, 10 m from the up-guard at
+    // (110,118) — close enough that the guard reads at full size and
+    // the three downed guards read around the player.
+    g.player.spawn(104, 126, Math.atan2(110 - 104, 118 - 126));
+    // Six fleeing civilians, staged INSIDE the frame so the panic reads:
+    // they start near the player and run 5.5 m/s away from him for the
+    // 2.5 s of the shot, ending at the frame edges and the top of the
+    // market. All start clear of the aim line (camera -> up-guard), so
+    // none of them can become the shot's target. The old spots (south
+    // of the market, behind the camera) left them fleeing out of frame.
+    const fleeSpots = [[102, 120], [110, 126], [102, 118], [114, 120], [103, 122], [106, 120]];
+    for (let i = 0; i < 6; i++) {
       const p = g.peds.peds[i];
-      p.pos.set(96 + (i % 5) * 3.2, 0, 116 + Math.floor(i / 5) * 5);
-      p.state = i === 0 ? 'flee' : 'walk';
+      p.pos.set(fleeSpots[i][0], 0, fleeSpots[i][1]);
+      p.state = 'flee';
       p.fleeT = 3;
     }
-    for (let i = 0; i < 120; i++) g.stepSim(1 / 60);
-    g.cameraCtl.setShotPose([93, 3.2, 110], [104, 1.4, 120]);
-    g.hud.setPrompt('E — STEAL CAR');
-    g.hud.showDialogue('Mira', 'DRIVER', 'That yellow sedan is unlocked. Take it — quick.');
-  } else if (kind === 'police') {
-    // 5-STAR CHASE: muscle car on the beach at sunset, cruisers in
-    // pursuit, roadblock ahead on the sand, helicopter with the
-    // searchlight cone. The camera sits over the water, so no building
-    // can block the frame.
-    // FIX ROUND 2: dusk purple-pink (low purple sun, pink sky, cool
-    // ambient) — a distinct time of day from the cover's golden hour —
-    // and mid/late-game staging: the first police frame showed ROOKIE /
-    // $250. Now ENFORCER 760/1000, $5,850.
+    // FIX ROUND 4: four more fleeing civilians (ten total — the re-test
+    // faulted "only a handful of tiny pedestrians"). They start clear
+    // of the aim line and run for 1.5 s, so they stay inside the frame
+    // instead of bolting out of it.
+    const extraFleeSpots = [[98, 122], [113, 127], [117, 115], [101, 113]];
+    for (let i = 0; i < 4; i++) {
+      const p = g.peds.peds[7 + i];
+      p.pos.set(extraFleeSpots[i][0], 0, extraFleeSpots[i][1]);
+      p.state = 'flee';
+      p.fleeT = 1.5;
+    }
+    // A witness on the phone: reports at 0.5 s, before the freeze, so
+    // the scanner ticker and the grey REPORTED stars are live. East of
+    // the player, in frame with the phone up (not under the camera).
+    // FIX ROUND 4: the witness keeps filming after the call (pedestrian
+    // .filming), so the glowing phone is still up at the freeze.
+    const w = g.peds.peds[6];
+    // FIX ROUND 4b: the witness at (108,130) fled south-east after
+    // reporting — straight out of frame behind the camera, so the
+    // fix-4 frame had the banner but no witness. From (110,122) the
+    // flee runs north-east, ending ~(119,116) still in frame, phone
+    // up and filming. Bright yellow shirt so the witness reads at
+    // frame scale against the dark market.
+    w.pos.set(110, 0, 122);
+    w.mesh.position.set(110, 0, 122);
+    w.state = 'witness';
+    w.reportTimer = 0.5;
+    w.mesh.children[0].material = new THREE.MeshLambertMaterial({ color: 0xe8c93a });
+    // A parked sedan to steal, south-west of the market — visible in the
+    // left foreground, off the sightline to the guards.
+    const sedan = new Car(g, 'sedan', 0x3a7ad9, 90, 134, Math.PI * 0.5);
+    sedan.speed = 0;
+    g.traffic.cars.push(sedan);
+    // Camera BEFORE the sim ticks: fire() shoots along the camera, and
+    // pickAimTarget reads the camera too — the crosshair sits on the
+    // up-guard at (110,118). Over the player's shoulder, close enough
+    // that the player, the stalls and the guards all fill the frame.
+    // Apply the pose to the camera NOW (update(0)): until cameraCtl runs,
+    // the camera still sits at the origin looking down -Z, and fire()
+    // would shoot from there with no target.
+    g.cameraCtl.setShotPose([99, 3.0, 133], [111, 1.4, 118]);
+    g.cameraCtl.update(0, g.input);
+    g.combat.select(2); // MAKO SMG
+    // Run the sim: the witness reports, the cruisers converge (the
+    // police spawn the moment they know), the civilians bolt. FIX ROUND
+    // 4: fire a BURST of three shots on the last three ticks, so three
+    // tracers (0.12 s life) and the muzzle flash are all fresh at the
+    // freeze — the fix-3 single shot left one thin tracer and a giant
+    // square flash. The first shot downs the aimed guard (4/5 DOWN);
+    // the next two have no target on the crosshair line, so they fly
+    // downrange as visible fire.
+    for (let i = 0; i < 150; i++) {
+      if (i >= 147 && i <= 149) g.combat.fire();
+      g.stepSim(1 / 60);
+    }
+    // FIX ROUND 4b: no carjack prompt in a gunfight frame — the staged
+    // "E — STEAL CAR" read as an instruction in the middle of the
+    // firefight. The parked sedan stays as set dressing.
+    g.hud.crosshair.classList.add('show');
+    // The mission beacon is a 26 m gold column over the target guard —
+    // it would stand in the middle of the frame and hide the guard.
+    // Hide it (and the ground marker) for this shot; the minimap keeps
+    // the gold target diamond, so the objective still reads.
+    g.missions.beacon.visible = false;
+    g.missions.marker.visible = false;
+    g.hud.showDialogue('Kiki', 'LOOKOUT', 'Five syndicate guns in the market. Drop them fast — if one calls it in, the whole precinct comes.');
+  } else if (kind === 'career') {
+    // THE EMPIRE: the career screen over the marina at dusk (19:40).
+    // Late-game state is staged through the real mission/save APIs:
+    // slot 2 holds missions 1–5, slot 1 holds all 8 with the late-game
+    // ledger. Cash after all 8 jobs is $17,550 (250 + 17,300 in
+    // rewards) and respect 960 — the honest totals, not round numbers.
     g.lighting.setTimeOfDay('dusk');
-    g.progression.addCash(5600);
-    g.progression.addRespect(760);
-    g.missions.start(3);
-    g.police.addHeat(100, 'police staging');
-    // FIX ROUND: the muscle car was dark red (0xb8302a) and sank into the
-    // light pool. Brighter red so the hero reads against the sand.
-    const car = new Car(g, 'muscle', 0xd93a2a, 120, 150, Math.PI / 2);
-    car.speed = 30;
+    const prog = g.progression;
+    for (const id of [1, 2, 3, 4, 5]) {
+      g.missions.start(id);
+      g.missions.complete();
+    }
+    // Slot 2's mid-game ledger, saved before the late-game values land.
+    const c2 = prog.career;
+    c2.carsStolen = 9;
+    c2.copsEscaped = 6;
+    c2.distanceDriven = 21400;
+    c2.peopleTakenOut = 11;
+    c2.longestJump = 32;
+    c2.racesWon = 0;
+    c2.highestWanted = 4;
+    prog.save(2);
+    for (const id of [6, 7, 8]) {
+      g.missions.start(id);
+      g.missions.complete();
+    }
+    prog.recordRaceWin(); // a second Grand Prix win, on the record
+    const c = prog.career;
+    c.carsStolen = 17;
+    c.copsEscaped = 12;
+    c.distanceDriven = 42800;
+    c.peopleTakenOut = 23;
+    c.longestJump = 47;
+    c.racesWon = 2;
+    c.highestWanted = 5;
+    prog.save(1);
+    // A little live heat, so the map shows its heat zone and escape route.
+    g.police.clearHeat();
+    g.police.addHeat(25, 'career staging');
+    // Player at the marina: the map arrow sits away from home, with the
+    // escape route running back to the safehouse.
+    g.player.spawn(60, -100, 0);
+    // High wide camera over the marina and the skyline, behind the overlay.
+    g.cameraCtl.setShotPose([80, 55, 90], [0, 5, -60]);
+    g.hud.clearBanner();
+    g.menus.showCareer();
+  } else if (kind === 'garage') {
+    // THE REWARD: the Motor Works at dusk (19:00). The player's sports
+    // car sits on the glowing pad, the neon sign behind it, the garage
+    // screen open on the right while the 3D car shows on the left.
+    g.lighting.setTimeOfDay('dusk');
+    const car = new Car(g, 'sports', 0xff7a55, 52, 128, 0);
+    car.speed = 0;
     g.player.enterCar(car);
-    g.player.pos.set(120, 150, 0);
-    for (let i = 0; i < 4; i++) g.police.spawnUnit('cruiser');
-    // Roadblock ahead on the sand: two cruisers across the beach.
-    for (const s of [-1, 1]) {
-      const rb = new Car(g, 'sedan', 0xf2f2f2, 168, 150 + s * 4.5, -Math.PI / 2, true);
-      rb.unit = { name: 'ROADBLOCK', state: 'roadblock', kind: 'cruiser', blockTarget: null, ramCooldown: 0 };
-      rb.speed = 0;
-      g.police.units.push(rb);
+    g.player.pos.set(52, 128, 0);
+    // The car arrives damaged (60/80 HP) so Repair is a real option,
+    // not a dead one — the panel shows CONDITION 75%, not 100%.
+    car.hp = 60;
+    // Two jobs already done, so the cash and the tune are earned, not
+    // conjured: $2,250 from jobs 1–2 (250 + 800 + 1,200), topped up to
+    // $14,850, then the engine tune bought for real — $10,850 left,
+    // engine level 1, top speed +8%. The panel's NEXT job reads JOB 3
+    // and the mission card agrees (2/8 jobs done); the old staging had
+    // $10,850 with 0 jobs done, which did not add up.
+    for (const id of [1, 2]) {
+      g.missions.start(id);
+      g.missions.complete();
     }
-    driveScript(g, 1, 0, false, 90);
-    // Compose the helicopter: west of the car, over the open beach/sea
-    // (no building can hide it), its cone falling diagonally onto the car.
-    // FIX ROUND: lower (18 -> 15) and closer so it is unmistakably in
-    // frame, not a smudge at the edge.
-    // FIX ROUND 2: lower again (15 -> 11) and closer in — fix 1 put it
-    // just above the top edge (34 deg above the look line, fov allows 30).
-    // FIX ROUND 3: the (x+10, 11, z-12) spot is INSIDE the boardwalk
-    // building the camera looks past — the heli was hidden behind it.
-    // Put it south of the car, over the open beach/sea, in the camera's
-    // view and clear of every building.
-    // FIX ROUND 4: (x-6, 13, z+18) is BEHIND the camera (camera sits at
-    // z+14) — the beam passed a few metres from the lens as a huge pale
-    // column. Put it east of the car, over the sea: in frame, clear of
-    // the buildings (west), clear of the camera, cone slanting onto the car.
-    // SECOND FIX ROUND: the camera moved EAST of the car,
-    // so the east heli spot is now behind the lens. The heli moves WEST
-    // of the car, over the beach/sea — in frame, clear of the buildings.
-    if (g.police.heli) {
-      const hp = g.police.heli;
-      hp.mesh.position.set(car.pos.x - 22, 12, car.pos.z - 6);
-      hp.mesh.lookAt(car.pos.x, 0, car.pos.z);
-      hp.pool.position.set(car.pos.x, 0.15, car.pos.z);
+    g.progression.addCash(12600);
+    g.progression.buyUpgrade('engine');
+    // Completing job 2 leaves Lo's payout line on screen for 7 s of HUD
+    // time; the garage panel would clip it mid-word. Run the HUD clock
+    // out — the live game fades the line the same way.
+    g.hud.update(7);
+    // A second sedan parked nearby, west of the garage.
+    const sedan = new Car(g, 'sedan', 0x3a7ad9, 42, 134, -Math.PI / 2);
+    sedan.speed = 0;
+    g.traffic.cars.push(sedan);
+    // The mechanic (spawned at boot) stands beside the pad, facing the car.
+    const mech = g.peds.peds.find((p) => p.static);
+    if (mech) {
+      mech.pos.set(47.5, 0, 128);
+      mech.heading = Math.PI / 2;
     }
-    const c = car.pos;
-    // Camera: EAST of the car, looking north-west — the car and the
-    // pursuit against the beach and the sea, the boardwalk skyline off
-    // to the right edge. FIX ROUND 2: the old camera (west of the car,
-    // looking north-east) let one big orange building wall eat the
-    // left-center of the frame. From the east the orange building is
-    // behind the camera and the frame is chase + beach + dusk sea.
-    g.cameraCtl.setShotPose([c.x + 12, c.y + 3.5, c.z + 8], [c.x - 4, c.y + 1, c.z - 3]);
-    g.hud.showDialogue('Kiki', 'LOOKOUT', 'Five stars and they are not backing off. Break line of sight!');
-  } else if (kind === 'mission') {
-    // DEPTH: street race on the east end of Marina Blvd, rivals
-    // alongside, the next gate's beacon ahead, crew and cash live. The
-    // camera sits in the bridge plaza clearing, so no building blocks it.
-    // FIX ROUND 2: neon night (vivid green/purple sky, lit windows, neon
-    // signs — the mission frame was a flat orange band before) and
-    // mid/late-game staging raised to ENFORCER 760/1000, $6,200.
-    g.lighting.setTimeOfDay('neon');
-    g.missions.start(7);
-    g.progression.addCash(5950);
-    g.progression.addRespect(760);
-    // FIX ROUND: lighter coral, matching the cover hero.
-    const car = new Car(g, 'sports', 0xff7a55, 180, 0, Math.PI / 2);
-    car.speed = 34;
-    g.player.enterCar(car);
-    g.player.pos.set(180, 0, 0);
-    g.missions.active.gate = 4; // next gate (200, 110): beacon ahead, north-east
-    // Three rival racers ahead and alongside, in the lanes.
-    for (const [x, z, col] of [[192, 2.2, 0x3a7ad9], [196, -2.2, 0xe8c93a], [200, 4.4, 0x2ea88a]]) {
-      const r = new Car(g, 'muscle', col, x, z, Math.PI / 2);
-      r.speed = 32;
-      g.traffic.cars.push(r);
-    }
-    driveScript(g, 1, 0, false, 30);
-    const c = car.pos;
-    // FIX ROUND: the first race frame was mostly empty sky with a lamp
-    // post dead centre splitting it. Lower and closer (y +5 -> +3, z +13
-    // -> +16, x -12 -> -8) so the pack fills the frame, the skyline sits
-    // on the upper third, and the lamp post slides to the frame edge.
-    // FIX ROUND 2: onto the road centreline and right behind the hero
-    // (x -8 -> +2, z +16 -> +12, y +3 -> +2.5) — fix 1 still left a lamp
-    // post dead centre because the camera sat on the lamp line.
-    // FIX ROUND 3: fix 2 cropped the hero (only its rear corner showed)
-    // — the camera was 12 m behind a 4.3 m car at fov 60. Pull back to
-    // 18 m and raise to y +4 so the hero sits whole in the lower centre.
-    // FIX ROUND 4: nudge right (x +2 -> +4) so the blue rival is not
-    // cropped by the left edge.
-    g.cameraCtl.setShotPose([c.x + 4, c.y + 4, c.z + 18], [c.x + 8, c.y + 1.5, c.z - 2]);
-    g.hud.showDialogue('Mira', 'DRIVER', 'Gate five of eight — stay on the boulevard, do not lift!');
+    // Camera: three-quarter front of the car, neon sign visible behind it.
+    g.cameraCtl.setShotPose([58, 3, 140], [46, 1.2, 124]);
+    g.hud.clearBanner();
+    g.menus.showGarage();
   }
 
   // Freeze the world, render one settled frame, signal readiness.

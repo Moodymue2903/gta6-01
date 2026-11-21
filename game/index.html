@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VERMILION KEYS — an open-world crime game</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #1a0f1e;
+    font-family: 'Segoe UI', Arial, Helvetica, sans-serif; color: #fff; }
+  #game, #game canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  #hud { position: absolute; inset: 0; pointer-events: none; z-index: 5;
+    font-size: 14px; text-shadow: 0 1px 2px rgba(0,0,0,.7); }
+  .panel { background: rgba(18, 10, 22, .72); border: 1px solid rgba(255, 194, 122, .45);
+    border-radius: 6px; padding: 8px 12px; backdrop-filter: blur(2px); }
+
+  /* Mission card, top-left. */
+  #mission-card { position: absolute; top: 14px; left: 14px; width: 340px;
+    background: rgba(18, 10, 22, .78); border: 1px solid rgba(255, 194, 122, .55);
+    border-left: 5px solid #ffc27a; border-radius: 6px; padding: 10px 12px; }
+  .m-job { color: #ffc27a; font-weight: 800; letter-spacing: 1px; font-size: 13px; }
+  .m-obj { font-size: 19px; font-weight: 700; line-height: 1.25; margin: 3px 0; }
+  .m-stage { color: #9fd8dd; font-size: 12px; letter-spacing: .5px; }
+  .m-timer { color: #ff6a4a; font-weight: 800; }
+
+  /* Wanted stars, top-centre. */
+  #wanted { position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    text-align: center; padding: 4px 18px 7px; border-radius: 6px;
+    background: rgba(18, 10, 22, .55); }
+  #wanted.hot { background: rgba(120, 10, 20, .72); border: 1px solid rgba(255, 80, 80, .6); }
+  .w-label { display: block; color: #ffb0a0; font-weight: 800; letter-spacing: 4px; font-size: 12px; }
+  .w-stars { font-size: 26px; line-height: 1; letter-spacing: 2px; }
+  .star { color: #5a4a52; }
+  .star.on { color: #ffd23a; text-shadow: 0 0 8px rgba(255, 210, 58, .8); }
+
+  /* Police roster, left under the mission card. */
+  #police-roster { position: absolute; top: 150px; left: 14px; width: 300px; display: none;
+    background: rgba(18, 10, 22, .72); border: 1px solid rgba(255, 90, 90, .4);
+    border-radius: 6px; padding: 8px 10px; font-size: 12px; }
+  #police-roster.show { display: block; }
+  .r-head { color: #ff9a8a; font-weight: 800; letter-spacing: 1px; margin-bottom: 5px; }
+  .r-row { display: flex; gap: 7px; align-items: center; padding: 2px 0; }
+  .r-dot { width: 8px; height: 8px; border-radius: 50%; background: #ff3a3a; flex: none; }
+  .r-row b { margin-left: auto; color: #ffd9a0; }
+  .r-row i { font-style: normal; color: #9fd8dd; font-size: 11px; }
+  .r-more { color: #b0a0b0; margin-top: 3px; }
+
+  /* Cash + respect, top-right. */
+  #cash-box { position: absolute; top: 14px; right: 14px; text-align: right;
+    background: rgba(18, 10, 22, .72); border: 1px solid rgba(255, 194, 122, .45);
+    border-radius: 6px; padding: 8px 14px; }
+  .cash { color: #7ddb8a; font-size: 30px; font-weight: 800; line-height: 1; }
+  .rank { font-size: 12px; letter-spacing: 1px; color: #ffd9a0; margin-top: 3px; }
+  .rank-bar { width: 170px; height: 6px; background: #3a2a3a; border-radius: 3px; margin-top: 4px; margin-left: auto; }
+  .rank-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff6a4a, #ffc27a); border-radius: 3px; }
+
+  /* Minimap, bottom-left. */
+  #minimap-wrap { position: absolute; left: 14px; bottom: 14px; width: 196px; height: 196px; }
+  #minimap { width: 190px; height: 190px; border-radius: 50%; display: block;
+    border: 3px solid rgba(255, 194, 122, .85); background: #1d6f7d; }
+  #location { position: absolute; bottom: -2px; left: 0; right: 0; text-align: center;
+    font-size: 12px; letter-spacing: 2px; color: #ffd9a0; font-weight: 700; }
+
+  /* Speed, bottom-right. */
+  #speed-box { position: absolute; right: 14px; bottom: 14px; text-align: right;
+    background: rgba(18, 10, 22, .72); border: 1px solid rgba(255, 194, 122, .45);
+    border-radius: 6px; padding: 8px 14px; min-width: 190px; }
+  .spd b { font-size: 42px; font-weight: 800; line-height: .9; }
+  .spd span { color: #9fd8dd; font-size: 13px; margin-left: 6px; }
+  .veh { color: #ffc27a; font-weight: 700; letter-spacing: 1px; font-size: 13px; }
+  .cond { height: 6px; background: #3a2a3a; border-radius: 3px; margin-top: 5px; }
+  .cond i { display: block; height: 100%; background: #7ddb8a; border-radius: 3px; }
+  .cond-lbl { font-size: 11px; color: #b0a0b0; margin-top: 2px; }
+
+  /* Weapon slots + radio, right edge. */
+  #weapon-slots { position: absolute; right: 14px; top: 130px; display: flex; flex-direction: column; gap: 5px; }
+  .ws { background: rgba(18, 10, 22, .7); border: 1px solid rgba(255, 255, 255, .18);
+    border-radius: 5px; padding: 5px 9px; font-size: 12px; font-weight: 700; letter-spacing: 1px; }
+  .ws b { color: #9fd8dd; margin-right: 6px; }
+  .ws span { color: #b0a0b0; margin-left: 6px; font-weight: 400; }
+  .ws.on { border-color: #ffc27a; background: rgba(255, 140, 60, .3); }
+  #radio-box { position: absolute; right: 14px; top: 330px; color: #ff9ad9; font-size: 12px;
+    font-weight: 700; letter-spacing: 1px; background: rgba(18, 10, 22, .7);
+    padding: 5px 9px; border-radius: 5px; }
+
+  /* Crew chips, right bottom. */
+  #crew-chips { position: absolute; right: 14px; bottom: 150px; display: flex; flex-direction: column; gap: 5px; }
+  .crew { background: rgba(18, 10, 22, .7); border: 1px solid rgba(255, 255, 255, .18);
+    border-radius: 5px; padding: 5px 9px; font-size: 12px; }
+  .crew b { color: #ffc27a; margin-right: 6px; }
+  .crew i { font-style: normal; color: #b0a0b0; margin-left: 6px; }
+  .crew.ready { border-color: #7ddb8a; }
+  .crew.ready i { color: #7ddb8a; }
+
+  /* Dialogue, bottom-centre. */
+  #dialogue { position: absolute; left: 50%; bottom: 24px; transform: translateX(-50%);
+    width: 520px; max-width: 60vw; display: none; gap: 10px; align-items: flex-start;
+    background: rgba(18, 10, 22, .82); border: 1px solid rgba(255, 194, 122, .5);
+    border-radius: 8px; padding: 10px 14px; }
+  #dialogue.show { display: flex; }
+  .dlg-face { width: 44px; height: 44px; flex: none; border-radius: 6px; background: #2ea88a;
+    color: #fff; font-size: 26px; font-weight: 800; display: flex; align-items: center;
+    justify-content: center; }
+  .dlg-body b { color: #ffc27a; letter-spacing: 1px; font-size: 13px; }
+  .dlg-body b i { color: #9fd8dd; font-style: normal; margin-left: 6px; font-size: 11px; }
+  .dlg-body span { display: block; font-size: 15px; line-height: 1.35; margin-top: 2px; }
+
+  /* Banner, centre. */
+  #banner { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%);
+    text-align: center; display: none; }
+  #banner.show { display: block; }
+  #banner h2 { font-size: 40px; letter-spacing: 3px; color: #ffc27a;
+    text-shadow: 0 2px 12px rgba(0,0,0,.8); }
+  #banner p { font-size: 16px; color: #fff; margin-top: 4px; }
+
+  /* Prompt, above the dialogue. */
+  #prompt { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%);
+    display: none; background: rgba(18, 10, 22, .8); border: 1px solid #ffc27a;
+    border-radius: 5px; padding: 6px 14px; font-weight: 700; letter-spacing: 1px; }
+  #prompt.show { display: block; }
+
+  /* Crosshair. */
+  #crosshair { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px;
+    transform: translate(-50%, -50%); display: none; }
+  #crosshair.show { display: block; }
+  .ch-dot { position: absolute; left: 9px; top: 9px; width: 4px; height: 4px; border-radius: 50%; background: #fff; }
+  #crosshair::before, #crosshair::after { content: ''; position: absolute; background: rgba(255,255,255,.85); }
+  #crosshair::before { left: 10px; top: 0; width: 2px; height: 22px; }
+  #crosshair::after { top: 10px; left: 0; height: 2px; width: 22px; }
+
+  /* Damage flash vignette. */
+  #vignette { position: absolute; inset: 0; display: none; pointer-events: none; }
+  #vignette.show { display: block; }
+  #vignette.hurt { box-shadow: inset 0 0 120px 40px rgba(255, 30, 30, .55); }
+  #vignette.boom { box-shadow: inset 0 0 140px 60px rgba(255, 120, 20, .6); }
+  #vignette.land { box-shadow: inset 0 0 90px 20px rgba(255, 255, 255, .35); }
+
+  /* Weapon wheel. */
+  #weapon-wheel { position: absolute; left: 50%; top: 50%; width: 260px; height: 260px;
+    transform: translate(-50%, -50%); display: none; }
+  #weapon-wheel.open { display: block; }
+  .ww-slot { position: absolute; left: 50%; top: 50%; width: 110px; padding: 8px 10px;
+    background: rgba(18, 10, 22, .85); border: 1px solid rgba(255, 194, 122, .5);
+    border-radius: 6px; text-align: center; }
+  .ww-slot:nth-child(1) { transform: translate(-50%, -50%) translateY(-105px); }
+  .ww-slot:nth-child(2) { transform: translate(-50%, -50%) translateX(105px); }
+  .ww-slot:nth-child(3) { transform: translate(-50%, -50%) translateY(105px); }
+  .ww-slot:nth-child(4) { transform: translate(-50%, -50%) translateX(-105px); }
+  .ww-slot b { display: block; color: #9fd8dd; }
+  .ww-slot span { font-weight: 700; letter-spacing: 1px; }
+
+  /* Menus. */
+  #menus { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
+  #title-screen, #pause-screen, #end-screen { position: absolute; inset: 0; display: none;
+    flex-direction: column; align-items: center; justify-content: center; text-align: center;
+    background: linear-gradient(180deg, rgba(26, 10, 30, .55), rgba(60, 20, 40, .78)); }
+  #title-screen.show, #pause-screen.show, #end-screen.show { display: flex; }
+  .t-kicker { letter-spacing: 5px; color: #9fd8dd; font-size: 13px; font-weight: 700; }
+  #title-screen h1, #pause-screen h1, #end-screen h1 { font-size: 84px; line-height: .95;
+    letter-spacing: 4px; color: #ffc27a; text-shadow: 0 4px 30px rgba(255, 120, 40, .6); margin: 14px 0; }
+  .t-sub { font-size: 18px; color: #ffe9c9; max-width: 640px; }
+  .t-controls { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center;
+    max-width: 700px; margin: 26px 0; font-size: 13px; color: #d8c8d8; }
+  .t-controls b { color: #ffc27a; }
+  .t-start { font-size: 20px; font-weight: 800; letter-spacing: 3px; color: #fff;
+    animation: pulse 1.4s infinite; margin-top: 8px; }
+  .t-save { margin-top: 14px; color: #9fd8dd; font-size: 13px; }
+  .p-row { font-size: 15px; color: #d8c8d8; margin-top: 6px; }
+  .p-row span { margin: 0 10px; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+
+  #err { position: absolute; top: 0; left: 0; right: 0; z-index: 50; color: #ff8080;
+    background: rgba(40, 0, 0, .8); font: 12px monospace; padding: 2px 8px; white-space: pre-wrap; }
+  @media (max-width: 900px) {
+    #mission-card { width: 250px; } .m-obj { font-size: 15px; }
+    #minimap-wrap { width: 140px; height: 140px; } #minimap { width: 134px; height: 134px; }
+    #title-screen h1 { font-size: 52px; }
+  }
+</style>
+</head>
+<body>
+<div id="game"></div>
+<div id="hud"></div>
+<div id="menus"></div>
+<div id="err"></div>
+<script type="importmap">{"imports": {"three": "./vendor/three.module.min.js"}}</script>
+<script type="module" src="./src/boot.js"></script>
+</body>
+</html>

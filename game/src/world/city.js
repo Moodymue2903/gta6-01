@@ -291,6 +291,110 @@ export function buildCity(scene, rng) {
     }
   }
 
+  // --- FIX ROUND 2: ground-floor dressing + roof variety. ---
+  // The re-test faulted "boxy primitives" and flat facades: every
+  // building was one box with one window grid. Three additions, all from
+  // a dedicated RNG (seeded separately, after the plots array is built)
+  // so the plot stream — and the sim — is untouched:
+  //  (1) a ground-floor band on every building: sign band + shopfront
+  //      glass + awning stripes painted into one canvas texture;
+  //  (2) 3D awning boxes on the road-facing side of most buildings;
+  //  (3) pyramid roofs on a third of low/mid buildings so the skyline steps.
+  const dressRng = mulberry32(20261123);
+  const bandTex = canvasTexture(128, 64, (ctx, w, h) => {
+    // Sign band (top quarter): light base with dark dashes as lettering.
+    ctx.fillStyle = '#f2e8d8';
+    ctx.fillRect(0, 0, w, 16);
+    ctx.fillStyle = '#3a2a3a';
+    for (let x = 8; x < w - 8; x += 14) ctx.fillRect(x, 5, 8, 6);
+    // Shopfront glass (middle half): dark glass with warm lit panes.
+    ctx.fillStyle = '#2a3a44';
+    ctx.fillRect(0, 16, w, 32);
+    for (let x = 8; x < w - 14; x += 26) {
+      ctx.fillStyle = dressRng() < 0.6 ? '#ffd9a0' : '#4a6a7a';
+      ctx.fillRect(x, 22, 16, 20);
+    }
+    // Awning stripes (bottom quarter): alternating light/dark bands.
+    for (let x = 0; x < w; x += 16) {
+      ctx.fillStyle = (x / 16) % 2 === 0 ? '#e8e8e8' : '#c95a4a';
+      ctx.fillRect(x, 48, 16, 16);
+    }
+  });
+  {
+    const bandGeo = new THREE.BoxGeometry(1, 1, 1);
+    bandGeo.translate(0, 0.5, 0);
+    const bandMat = new THREE.MeshLambertMaterial({ map: bandTex, emissive: 0x332211, emissiveMap: bandTex, emissiveIntensity: 0.35 });
+    const bandCols = [0xffe0b0, 0xffc0c0, 0xc0e0ff, 0xd0ffc0, 0xffe8a0];
+    const bands = new THREE.InstancedMesh(bandGeo, bandMat, plots.length);
+    plots.forEach((p, i) => {
+      q4.setFromAxisAngle(up, p.rot);
+      m4.compose(new THREE.Vector3(p.x, 0, p.z), q4, new THREE.Vector3(p.w + 0.5, 3.6, p.d + 0.5));
+      bands.setMatrixAt(i, m4);
+      col.setHex(choice(dressRng, bandCols));
+      bands.setColorAt(i, col);
+    });
+    bands.receiveShadow = true;
+    scene.add(bands);
+  }
+  // Awnings on the road-facing side of most buildings (no rotation: the
+  // width is the smaller footprint side, so it fits either face).
+  {
+    const awnCols = [0xff6a4a, 0x2ea88a, 0xe8c93a, 0xd95a8a, 0x3a7ad9, 0x7ad9b0];
+    const awnSpots = [];
+    for (const p of plots) {
+      if (dressRng() > 0.6) continue;
+      const near = nearestRoadPoint(p.x, p.z);
+      const dx = near.x - p.x;
+      const dz = near.z - p.z;
+      const fw = Math.min(p.w, p.d) * 0.6;
+      if (Math.abs(dx) > Math.abs(dz)) {
+        const s = Math.sign(dx) || 1;
+        awnSpots.push({ x: p.x + s * (p.w / 2 + 0.8), y: 3.4, z: p.z, w: 1.8, d: fw });
+      } else {
+        const s = Math.sign(dz) || 1;
+        awnSpots.push({ x: p.x, y: 3.4, z: p.z + s * (p.d / 2 + 0.8), w: fw, d: 1.8 });
+      }
+    }
+    if (awnSpots.length) {
+      const aGeo = new THREE.BoxGeometry(1, 0.25, 1);
+      const aMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      const awns = new THREE.InstancedMesh(aGeo, aMat, awnSpots.length);
+      awnSpots.forEach((s, i) => {
+        m4.makeTranslation(s.x, s.y, s.z);
+        m4.scale(new THREE.Vector3(s.w, 1, s.d));
+        awns.setMatrixAt(i, m4);
+        col.setHex(choice(dressRng, awnCols));
+        awns.setColorAt(i, col);
+      });
+      awns.castShadow = true;
+      scene.add(awns);
+    }
+  }
+  // Pyramid roofs on a third of low/mid buildings.
+  {
+    const pyrCols = [0x5a4a52, 0x7a4a3a, 0x4a5a6a, 0x8a6a4a, 0x6a4a5a, 0xa84a3a];
+    const pyrSpots = [];
+    for (const p of plots) {
+      if (p.h >= 40 || dressRng() > 0.35) continue;
+      pyrSpots.push(p);
+    }
+    if (pyrSpots.length) {
+      const pGeo = new THREE.ConeGeometry(1, 1, 4);
+      pGeo.rotateY(Math.PI / 4);
+      const pMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+      const pyrs = new THREE.InstancedMesh(pGeo, pMat, pyrSpots.length);
+      pyrSpots.forEach((p, i) => {
+        q4.setFromAxisAngle(up, p.rot);
+        m4.compose(new THREE.Vector3(p.x, p.h + 0.8 + 1.1, p.z), q4, new THREE.Vector3(p.w * 0.72, 2.2, p.d * 0.72));
+        pyrs.setMatrixAt(i, m4);
+        col.setHex(choice(dressRng, pyrCols));
+        pyrs.setColorAt(i, col);
+      });
+      pyrs.castShadow = true;
+      scene.add(pyrs);
+    }
+  }
+
   // --- Palms along the beach and boulevards (instanced trunks + crowns). ---
   const palmSpots = [];
   for (let x = -60; x < 225; x += 13) {
@@ -556,6 +660,11 @@ export function buildCity(scene, rng) {
     colliders,
     spots,
     bridge,
+    // Exposed so screenshot staging can hide the lamps right at the leap
+    // (SECOND FIX ROUND: a causeway lamp head filled the cover frame).
+    // The live game keeps them; only the cover staging hides them.
+    lamps,
+    lampPoles: poles,
     groundHeightAt: (x, z) => bridge.heightAt(x, z),
     update(dt, t) {
       bridge.update(dt);

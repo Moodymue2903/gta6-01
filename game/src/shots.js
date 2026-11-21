@@ -4,6 +4,7 @@
 // the camera, then freezes the sim and raises window.__shotReady so the
 // screenshot driver can capture a real render — never a composite.
 
+import * as THREE from 'three';
 import { Car } from './entities/vehicle.js';
 import { choice } from './util.js';
 
@@ -23,6 +24,9 @@ export function stageShot(kind, game) {
     // THE LEAP, westbound into the sunset: coral supercar airborne over
     // the raised drawbridge, helicopter searchlight cone diagonal across
     // the frame, roadblock behind, full HUD.
+    // FIX ROUND 2: golden hour (bright, saturated — the fix-1 brightness
+    // win is kept: cover R ~147). Each shot gets its OWN time of day.
+    g.lighting.setTimeOfDay('golden');
     g.city.bridge.forceUp = true;
     g.missions.start(8);
     // FIX ROUND: the first cover showed $250 / ROOKIE 0/100 on a JOB 8/8
@@ -47,24 +51,55 @@ export function stageShot(kind, game) {
       rb.speed = 22;
       g.police.units.push(rb);
     }
-    // Run the sim: the car climbs the west leaf and launches. Freeze just
-    // past the tip (x <= 237), while the raised bridge and gap are still
-    // right behind it — not at the apex, where the bridge is out of frame.
+    // Run the sim: the car climbs the west leaf and launches. Freeze
+    // just after takeoff, while it is still RISING (vy > 0, so the pitch
+    // is nose-up) and near the bridge (x <= 240), so the takeoff leaf,
+    // the gap and the landing leaf are all legible in the frame and the
+    // hero shadow blob sits on the far leaf below the car — the arc reads
+    // as a jump, not flight. The old condition also broke on the DESCENT
+    // (vy < 0, y > 3), which froze the car nose-down — that is the
+    // nose-down render the re-author read. Never freeze descending.
+    // x <= 240, not 250: freezing at 250 put the car low and close
+    // behind the raised east leaf, and the leaf hid the car from the
+    // south camera. At 240 the car is further west, higher, and clear
+    // of the leaf while still rising (vy ~7, pitch ~0.19 nose-up).
     g.scriptedDrive = { throttle: 1, steer: 0, handbrake: false };
     for (let i = 0; i < 300; i++) {
       g.stepSim(1 / 60);
-      if (car.airborne && (car.pos.x <= 237 || (car.vy < 0 && car.pos.y > 3))) break;
+      if (car.airborne && car.vy > 0 && car.pos.x <= 240) break;
     }
     g.scriptedDrive = null;
+    // The causeway lamp heads sit between any south camera and the car —
+    // one filled the frame as a giant white disc. Hide the lamp heads
+    // and poles within 12 m of the frozen car (staging only; the live
+    // game keeps its lamps). The bridge, not a lamp, frames the jump.
+    if (g.city.lamps && g.city.lampPoles) {
+      const lm = new THREE.Matrix4();
+      const lp = new THREE.Vector3();
+      for (let i = 0; i < g.city.lamps.count; i++) {
+        g.city.lamps.getMatrixAt(i, lm);
+        lp.setFromMatrixPosition(lm);
+        if (lp.distanceTo(car.pos) < 12) {
+          lm.makeScale(0, 0, 0);
+          g.city.lamps.setMatrixAt(i, lm);
+          g.city.lampPoles.setMatrixAt(i, lm);
+        }
+      }
+      g.city.lamps.instanceMatrix.needsUpdate = true;
+      g.city.lampPoles.instanceMatrix.needsUpdate = true;
+    }
     // Compose the helicopter: up-northwest of the car, in frame, its cone
     // falling diagonally onto the car. FIX ROUND: the first cover cropped
     // the heli at the top edge (y 24, too high and too far north). Lower
     // and closer to the look line so the rotors clear the border.
     // FIX ROUND 2: further west (x -10 -> -16) so the beam slants
     // diagonally across the frame instead of dropping vertically.
+    // SECOND FIX ROUND: the abeam camera put the heli at the top edge,
+    // half behind the mission card. Lower (18 -> 13.5) and closer in
+    // (x -16 -> -12, z -14 -> -10) so it sits fully in the upper-left.
     if (g.police.heli) {
       const hp = g.police.heli;
-      hp.mesh.position.set(car.pos.x - 16, 18, car.pos.z - 14);
+      hp.mesh.position.set(car.pos.x - 12, 13.5, car.pos.z - 10);
       hp.mesh.lookAt(car.pos.x, 0, car.pos.z);
       hp.pool.position.set(car.pos.x, 0.15, car.pos.z);
     }
@@ -75,14 +110,50 @@ export function stageShot(kind, game) {
     // FIX ROUND: closer and lower (z +16 -> +11, y -2 -> -1) with a wider
     // lens (fov 48 -> 55) so the car spans ~25% of the frame instead of
     // ~15%, and the helicopter fits above it with room to spare.
+    // FIX ROUND 2: moved mostly abeam (x +6 -> +5, z +11 -> +13) so the
+    // car shows its FLANK three-quarter with visible wheels and side
+    // panels — the old rear-dominant angle made it a flat orange slab —
+    // while both bridge leaves and the gap stay legible below it.
+    // SECOND FIX ROUND: the render showed the car from the rear-below
+    // (a red wedge, underside visible, flank hidden) and a lamp head
+    // filling the left-centre. Abeam and closer (x +5 -> -1, z +13 ->
+    // +11, y +1.5 -> +2): due south of the car, slightly above it, so
+    // the flank and top read and the car spans ~25% of the frame.
+    // The lamps at the leap are hidden above, so the bridge frames it.
+    // RE-AUTHOR FIX: camera y +2 -> +3.5 so it looks OVER the raised
+    // east leaf at the rising car (the first re-author render froze the
+    // car low behind the leaf and the leaf hid it).
     const c = car.pos;
-    g.cameraCtl.setShotPose([c.x + 6, c.y - 1, c.z + 11], [c.x - 6, c.y + 3, c.z - 4]);
+    g.cameraCtl.setShotPose([c.x - 1, c.y + 3.5, c.z + 11], [c.x - 3, c.y + 2.5, c.z - 3]);
     g.camera.fov = 55;
     g.camera.updateProjectionMatrix();
     g.hud.clearBanner();
+    // RE-AUTHOR FIX: do NOT open the radial weapon wheel in the cover
+    // shot. Its 260px box spreads the four slots across the frame and
+    // they land on the leaping car, reading as floating labels — a bug,
+    // not a feature. The compact #weapon-slots column (top-right,
+    // always in the HUD) already shows all four weapons, as in fix 1.
+    // showWeaponWheel() stays for the live game only.
     g.hud.showDialogue('Marco', 'SYNDICATE', 'The bridge is up — leap it, or the Keys eat you!');
   } else if (kind === 'foot') {
     // ON FOOT: boardwalk crowd, carjacking in progress.
+    // FIX ROUND 2: bright daylight (blue sky, teal water, high sun) —
+    // #5 varies the time of day across frames; ours was the same flat
+    // orange sky in all four. And mid/late-game staging: the first foot
+    // frame showed ROOKIE / $250. Now HUSTLER 520/700, $4,050.
+    g.lighting.setTimeOfDay('day');
+    g.progression.addCash(3800);
+    g.progression.addRespect(520);
+    // RE-AUTHOR FIX: the foot frame showed "JOB 1 / 0/8 JOBS DONE" next
+    // to HUSTLER / $4,050 — the card said no job had ever been done
+    // while the rank said mid-game. Start JOB 1 (BAGMAN) so the card
+    // shows a live job with its real objective and stage counter. The
+    // goto target is the marina (off-frame; its beacon never enters
+    // the shot), the minimap gains a gold target diamond, and no extra
+    // entity spawns (a goto stage spawns nothing). The mission banner
+    // is cleared at the end of stageShot and the Mira dialogue below
+    // overwrites the briefing.
+    g.missions.start(1);
     g.player.spawn(100, 122, Math.PI * 0.6);
     const target = new Car(g, 'sedan', 0xe8c93a, 104, 119, Math.PI * 0.5);
     target.speed = 0;
@@ -103,6 +174,13 @@ export function stageShot(kind, game) {
     // pursuit, roadblock ahead on the sand, helicopter with the
     // searchlight cone. The camera sits over the water, so no building
     // can block the frame.
+    // FIX ROUND 2: dusk purple-pink (low purple sun, pink sky, cool
+    // ambient) — a distinct time of day from the cover's golden hour —
+    // and mid/late-game staging: the first police frame showed ROOKIE /
+    // $250. Now ENFORCER 760/1000, $5,850.
+    g.lighting.setTimeOfDay('dusk');
+    g.progression.addCash(5600);
+    g.progression.addRespect(760);
     g.missions.start(3);
     g.police.addHeat(100, 'police staging');
     // FIX ROUND: the muscle car was dark red (0xb8302a) and sank into the
@@ -120,7 +198,7 @@ export function stageShot(kind, game) {
       g.police.units.push(rb);
     }
     driveScript(g, 1, 0, false, 90);
-    // Compose the helicopter: north-east of the car, over the open sea
+    // Compose the helicopter: west of the car, over the open beach/sea
     // (no building can hide it), its cone falling diagonally onto the car.
     // FIX ROUND: lower (18 -> 15) and closer so it is unmistakably in
     // frame, not a smudge at the edge.
@@ -134,28 +212,35 @@ export function stageShot(kind, game) {
     // z+14) — the beam passed a few metres from the lens as a huge pale
     // column. Put it east of the car, over the sea: in frame, clear of
     // the buildings (west), clear of the camera, cone slanting onto the car.
+    // SECOND FIX ROUND: the camera moved EAST of the car,
+    // so the east heli spot is now behind the lens. The heli moves WEST
+    // of the car, over the beach/sea — in frame, clear of the buildings.
     if (g.police.heli) {
       const hp = g.police.heli;
-      hp.mesh.position.set(car.pos.x + 20, 11, car.pos.z + 5);
+      hp.mesh.position.set(car.pos.x - 22, 12, car.pos.z - 6);
       hp.mesh.lookAt(car.pos.x, 0, car.pos.z);
       hp.pool.position.set(car.pos.x, 0.15, car.pos.z);
     }
     const c = car.pos;
-    // Camera: south of the car over the open water and HIGH, looking
-    // north — the car and the pursuit against the boardwalk skyline and
-    // the sky, teal sea in the foreground, pursuers below the sightline.
-    // FIX ROUND: lower and closer (y +6 -> +3.5, z +20 -> +14) — the first
-    // frame's high camera shrank the car and let one brown building wall
-    // eat the left half of the frame.
-    g.cameraCtl.setShotPose([c.x - 8, c.y + 3.5, c.z + 14], [c.x + 6, c.y + 1, c.z - 4]);
+    // Camera: EAST of the car, looking north-west — the car and the
+    // pursuit against the beach and the sea, the boardwalk skyline off
+    // to the right edge. FIX ROUND 2: the old camera (west of the car,
+    // looking north-east) let one big orange building wall eat the
+    // left-center of the frame. From the east the orange building is
+    // behind the camera and the frame is chase + beach + dusk sea.
+    g.cameraCtl.setShotPose([c.x + 12, c.y + 3.5, c.z + 8], [c.x - 4, c.y + 1, c.z - 3]);
     g.hud.showDialogue('Kiki', 'LOOKOUT', 'Five stars and they are not backing off. Break line of sight!');
   } else if (kind === 'mission') {
     // DEPTH: street race on the east end of Marina Blvd, rivals
     // alongside, the next gate's beacon ahead, crew and cash live. The
     // camera sits in the bridge plaza clearing, so no building blocks it.
+    // FIX ROUND 2: neon night (vivid green/purple sky, lit windows, neon
+    // signs — the mission frame was a flat orange band before) and
+    // mid/late-game staging raised to ENFORCER 760/1000, $6,200.
+    g.lighting.setTimeOfDay('neon');
     g.missions.start(7);
-    g.progression.addCash(4200);
-    g.progression.addRespect(320);
+    g.progression.addCash(5950);
+    g.progression.addRespect(760);
     // FIX ROUND: lighter coral, matching the cover hero.
     const car = new Car(g, 'sports', 0xff7a55, 180, 0, Math.PI / 2);
     car.speed = 34;

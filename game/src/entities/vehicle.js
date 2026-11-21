@@ -43,6 +43,17 @@ export function makeCarMesh(cls, color, police = false) {
   if (cls === 'muscle' || cls === 'sports') {
     g.add(box(L * 0.16, 0.1, W * 0.9, 0x1a1a20, -L * 0.46, H * 0.62, 0)); // spoiler
   }
+  // Side details so the flank reads as a car, not a flat slab: a glass
+  // band on the cabin flanks (slightly wider than the cabin, so it reads
+  // from the side), dark side skirts, a bright grille strip and a rear
+  // bumper. FIX ROUND 2: the cover car read as a flat orange slab from
+  // behind because the flank had no detail at all.
+  g.add(box(cabinL * 0.82, cabinH * 0.52, W * 0.9, 0x7ab8d9, cls === 'van' ? -L * 0.08 : -L * 0.04, H * 0.6 + cabinH / 2, 0)); // glass band
+  for (const s of [-1, 1]) {
+    g.add(box(L * 0.92, 0.16, 0.06, 0x1a1a20, 0, H * 0.16, s * (W / 2 + 0.01))); // side skirt
+  }
+  g.add(box(0.1, 0.24, W * 0.78, 0xc8c8d0, L / 2 - 0.02, H * 0.3, 0)); // grille
+  g.add(box(0.1, 0.2, W * 0.78, 0x2a2a30, -L / 2 + 0.02, H * 0.3, 0)); // rear bumper
   if (cls === 'bike') {
     g.add(box(0.5, 0.5, 0.5, 0x222226, 0.1, H * 0.75, 0)); // rider torso
   }
@@ -103,6 +114,7 @@ export class Car {
     this.speed = 0;
     this.vy = 0;
     this.airborne = false;
+    this.pitch = 0; // nose-up angle while airborne / on the ramp (the leap read)
     this.slide = new THREE.Vector3();
     this.steer = 0;
     this.hp = this.def.hp;
@@ -117,9 +129,21 @@ export class Car {
 
   syncMesh() {
     this.mesh.position.copy(this.pos);
-    this.mesh.rotation.set(0, this.heading, 0);
+    // Yaw: the mesh's nose (+X local) must point along the travel
+    // direction. dir = (sin h, 0, cos h), but +X under Ry(h) maps to
+    // (cos h, 0, -sin h) — 90 deg off, so every car in the game drove
+    // sideways (nose north/south while travelling east/west). That is
+    // why the cover car always read as a flat slab: the south camera
+    // saw its 2 m rear, never its 4.3 m flank. Ry(h - PI/2) maps +X
+    // onto dir exactly. (SECOND FIX ROUND — root cause of the slab read.)
+    // Euler order XYZ applies the Z rotation in the car's local frame
+    // first, then the yaw: pitch tilts the nose up around the lateral
+    // axis, exactly what a takeoff needs.
+    this.mesh.rotation.set(0, this.heading - Math.PI / 2, this.pitch);
     const spin = this.speed * 0.06;
-    for (const w of this.mesh.userData.wheels) w.rotation.y += spin;
+    // Spin the wheels about their axle (the group's lateral Z axis).
+    // The old code spun them about Y (vertical) — a lazy Susan, not a roll.
+    for (const w of this.mesh.userData.wheels) w.rotation.z += spin;
   }
 
   // Arcade step. input: {throttle (-1..1), steer (-1..1), handbrake} or null.
@@ -192,6 +216,13 @@ export class Car {
     } else {
       this.pos.y = 0;
     }
+
+    // Pitch: nose up on takeoff and while climbing the ramp, nose
+    // slightly down on the way down. A level car mid-air reads as
+    // flying, not jumping — the pitch is what sells the leap.
+    if (this.airborne) this.pitch = clamp(this.vy * 0.025, -0.12, 0.32);
+    else if (ground > 0.5) this.pitch = 0.3;
+    else this.pitch = 0;
 
     // Stay on land: water slows and pushes back; deep water respawns.
     if (!isLand(this.pos.x, this.pos.z)) {

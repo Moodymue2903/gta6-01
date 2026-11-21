@@ -12,36 +12,94 @@ const MAX_UNITS = 8;
 
 function makeHeliMesh() {
   const g = new THREE.Group();
-  // FIX ROUND 2: the body was near-black (0x2a2a34, then 0x3a3a48) and
-  // read as a black silhouette against the bright sky in both the cover
-  // and the police frame. A white police helicopter reads as an object
-  // against an orange sky; the rotor stays dark, the glass stays teal.
+  // FIX ROUND 2 — full remodel. The old heli was a white box with a
+  // black cross on top: a grey slab, not a helicopter. A real heli reads
+  // at 320px by its silhouette, so every part below exists to make that
+  // silhouette: rounded nose + glass canopy, tail boom + fin + tail
+  // rotor, skids, a rotor mast, and the searchlight under the nose.
   const bodyMat = new THREE.MeshLambertMaterial({ color: 0xe8e8e8 });
-  const body = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.6, 2.2), bodyMat);
+  const darkMat = new THREE.MeshLambertMaterial({ color: 0x1a1a20 });
+  const glassMat = new THREE.MeshLambertMaterial({ color: 0x7ab8d9, emissive: 0x1a3a4a, emissiveIntensity: 0.6 });
+  // Rounded fuselage: capsule lying along X (nose +X), slightly squashed.
+  const bodyGeo = new THREE.CapsuleGeometry(1.0, 2.0, 6, 12);
+  bodyGeo.rotateZ(Math.PI / 2);
+  const body = new THREE.Mesh(bodyGeo, bodyMat);
+  body.scale.set(1, 0.85, 1.05);
   body.castShadow = true;
   g.add(body);
-  const tail = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.5, 0.5), bodyMat);
-  tail.position.set(-4, 0.4, 0);
-  g.add(tail);
-  const glass = new THREE.Mesh(
-    new THREE.BoxGeometry(1.4, 1.0, 2.0),
-    new THREE.MeshLambertMaterial({ color: 0x9fd8dd, emissive: 0x224455 }),
-  );
-  glass.position.set(1.8, 0.2, 0);
-  g.add(glass);
+  // Glass cockpit canopy: flattened sphere at the nose.
+  const canopy = new THREE.Mesh(new THREE.SphereGeometry(0.95, 12, 10), glassMat);
+  canopy.scale.set(1.1, 0.75, 0.95);
+  canopy.position.set(1.5, 0.15, 0);
+  g.add(canopy);
+  // Red police stripe along each flank.
+  for (const s of [-1, 1]) {
+    const stripe = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.28, 0.06), new THREE.MeshBasicMaterial({ color: 0xd93a2a }));
+    stripe.position.set(-0.3, -0.1, s * 1.02);
+    g.add(stripe);
+  }
+  // Tail boom: tapered cylinder along -X.
+  const boom = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.42, 4.2, 8), bodyMat);
+  boom.rotation.z = Math.PI / 2;
+  boom.position.set(-3.6, 0.25, 0);
+  g.add(boom);
+  // Tail fin (vertical) + horizontal stabilizer.
+  const fin = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.5, 0.9), bodyMat);
+  fin.position.set(-5.5, 0.9, 0);
+  g.add(fin);
+  const stab = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.1, 2.2), bodyMat);
+  stab.position.set(-5.2, 0.3, 0);
+  g.add(stab);
+  // Tail rotor: small cross on the fin side, spins about the lateral axis.
+  const tailRotor = new THREE.Group();
+  tailRotor.position.set(-5.6, 0.9, 0.55);
+  const trBlade = new THREE.Mesh(new THREE.BoxGeometry(0.06, 1.6, 0.12), darkMat);
+  tailRotor.add(trBlade);
+  const trBlade2 = trBlade.clone();
+  trBlade2.rotation.x = Math.PI / 2;
+  tailRotor.add(trBlade2);
+  g.add(tailRotor);
+  // Skids: two rails + struts.
+  const skidMat = new THREE.MeshLambertMaterial({ color: 0x2a2a30 });
+  for (const s of [-1, 1]) {
+    const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 3.6, 6), skidMat);
+    rail.rotation.z = Math.PI / 2;
+    rail.position.set(0.3, -1.15, s * 0.85);
+    g.add(rail);
+    for (const sx of [-0.9, 0.9]) {
+      const strut = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.5, 6), skidMat);
+      strut.position.set(sx, -0.85, s * 0.85);
+      g.add(strut);
+    }
+  }
+  // Rotor mast + head.
+  const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.22, 0.7, 8), skidMat);
+  mast.position.y = 1.15;
+  g.add(mast);
   const rotor = new THREE.Group();
-  rotor.position.y = 1.1;
-  const blade = new THREE.Mesh(new THREE.BoxGeometry(9, 0.08, 0.5), new THREE.MeshLambertMaterial({ color: 0x1a1a20 }));
+  rotor.position.y = 1.55;
+  const blade = new THREE.Mesh(new THREE.BoxGeometry(9, 0.08, 0.5), darkMat);
   rotor.add(blade);
   const blade2 = blade.clone();
   blade2.rotation.y = Math.PI / 2;
   rotor.add(blade2);
+  // Rotor blur disc: a faint disc under the blades so the spinning rotor
+  // reads as a disc, not a black cross.
+  const disc = new THREE.Mesh(
+    new THREE.CircleGeometry(4.5, 24),
+    new THREE.MeshBasicMaterial({ color: 0x222226, transparent: true, opacity: 0.14, depthWrite: false, side: THREE.DoubleSide }),
+  );
+  disc.rotation.x = -Math.PI / 2;
+  disc.position.y = -0.05;
+  rotor.add(disc);
   g.add(rotor);
-  // Searchlight cone, LAYERED (FIX ROUND): the first sheet's single flat
-  // triangle of uniform colour read as geometry pasted over the sky, not
-  // as light. Outer cone faint and wide, inner cone bright and narrow, a
-  // hotspot sprite at the lamp, and the ground pool below — brightest at
-  // the core, fading toward the edges and along the length.
+  // Searchlight, LAYERED and mounted under the nose (FIX ROUND 2: it
+  // hung from the body centre before). Outer cone faint and wide, inner
+  // cone bright and narrow, a hotspot sprite at the lamp, and the ground
+  // pool below — brightest at the core, fading toward the edges and
+  // along the length.
+  const lamp = new THREE.Group();
+  lamp.position.set(1.9, -0.9, 0);
   function beam(radius, opacity) {
     const geo = new THREE.ConeGeometry(radius, 46, 14, 1, true);
     geo.translate(0, -23, 0);
@@ -55,8 +113,8 @@ function makeHeliMesh() {
   }
   const coneOuter = beam(4.5, 0.07);
   const cone = beam(2.4, 0.25);
-  g.add(coneOuter);
-  g.add(cone);
+  lamp.add(coneOuter);
+  lamp.add(cone);
   // Hotspot glow at the lamp itself (shared radial-gradient sprite).
   const glowTex = canvasTexture(64, 64, (ctx, w, h) => {
     const grad = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2);
@@ -68,9 +126,9 @@ function makeHeliMesh() {
   });
   const hotspot = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xfff2b0, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
   hotspot.scale.set(5, 5, 1);
-  hotspot.position.set(0, -1.2, 0);
-  g.add(hotspot);
-  g.userData = { rotor, cone, coneOuter, hotspot };
+  lamp.add(hotspot);
+  g.add(lamp);
+  g.userData = { rotor, tailRotor, cone, coneOuter, hotspot };
   return g;
 }
 
@@ -284,6 +342,7 @@ export class Police {
       h.mesh.position.set(hx, 44, hz);
       h.mesh.lookAt(pPos.x, 0, pPos.z);
       h.mesh.userData.rotor.rotation.y += dt * 22;
+      if (h.mesh.userData.tailRotor) h.mesh.userData.tailRotor.rotation.x += dt * 30;
       h.pool.position.set(pPos.x, 0.15, pPos.z);
     }
 

@@ -4,9 +4,9 @@
 // steps, so a press can never fire twice in one frame).
 
 import * as THREE from 'three';
-import { mulberry32 } from './util.js';
+import { mulberry32, clamp } from './util.js';
 import { buildCity } from './world/city.js';
-import { GRAPH, nearestRoadPoint } from './world/roadNetwork.js';
+import { GRAPH, isLand, nearestRoadPoint } from './world/roadNetwork.js';
 import { buildLighting } from './world/lighting.js';
 import { Player } from './entities/player.js';
 import { Car } from './entities/vehicle.js';
@@ -81,6 +81,24 @@ class Game {
     this.starterCar.owned = true;
     this.player.spawn(s.x, s.z, s.heading);
 
+    // Hero contact shadow: one dark ellipse on the surface below the
+    // player (car or on foot). It grounds the hero, and on the cover
+    // leap it is the proof the car is jumping a gap — the shadow sits on
+    // the far leaf/road while the car is above the gap, so the height
+    // reads as a jump instead of flight. Opacity fades with height.
+    // FIX ROUND 2 (user feedback: the car read as flying, not leaping).
+    this.heroBlob = new THREE.Mesh(
+      new THREE.CircleGeometry(1, 20),
+      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false }),
+    );
+    this.heroBlob.rotation.x = -Math.PI / 2;
+    // Draw after the heli's searchlight pool (renderOrder 1-2): the pool
+    // sits directly below the car on the cover, and without this the
+    // additive pool washes the shadow out. The blob must read as a dark
+    // ellipse ON the bright pool — the shadow that proves the leap.
+    this.heroBlob.renderOrder = 5;
+    this.scene.add(this.heroBlob);
+
     // Gold start beacon: the next job begins at the safehouse.
     const beaconGeo = new THREE.CylinderGeometry(2.4, 2.4, 30, 12, 1, true);
     this.startBeacon = new THREE.Mesh(
@@ -120,6 +138,20 @@ class Game {
     this.audio.update(dt);
     const focus = player.inCar ? player.inCar.pos : player.pos;
     this.lighting.update(dt, this.time, focus);
+    // Hero contact shadow under the player (car or on foot).
+    const hero = player.inCar || player;
+    const hx = hero.pos.x;
+    const hz = hero.pos.z;
+    const hg = this.city.groundHeightAt(hx, hz);
+    const surfY = hg === -999 ? -1.4 : (isLand(hx, hz) ? Math.max(hg, 0) : -1.4);
+    const hh = Math.max(0, hero.pos.y - surfY);
+    this.heroBlob.position.set(hx, surfY + 0.06, hz);
+    this.heroBlob.material.opacity = clamp(0.55 - hh * 0.04, 0.18, 0.55);
+    if (player.inCar) {
+      this.heroBlob.scale.set(player.inCar.def.len * 0.62, player.inCar.def.wid * 0.75, 1);
+    } else {
+      this.heroBlob.scale.set(0.9, 0.9, 1);
+    }
     // Start beacon pulses while no job is active.
     const idle = !this.missions.active && (this.state === 'playing' || this.state === 'shot');
     this.startBeacon.visible = idle;

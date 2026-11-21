@@ -27,11 +27,12 @@ export class HUD {
     this.cashBox = el('div', 'cash-box', hud);
     this.minimapWrap = el('div', 'minimap-wrap', hud);
     this.minimap = el('canvas', 'minimap', this.minimapWrap);
-    this.minimap.width = 190;
-    this.minimap.height = 190;
+    this.minimap.width = 230;
+    this.minimap.height = 230;
     this.location = el('div', 'location', this.minimapWrap);
     this.speedBox = el('div', 'speed-box', hud);
     this.weaponSlots = el('div', 'weapon-slots', hud);
+    this.wheel = el('div', 'weapon-wheel', hud);
     this.radioBox = el('div', 'radio-box', hud);
     this.crewChips = el('div', 'crew-chips', hud);
     this.dialogue = el('div', 'dialogue', hud);
@@ -48,6 +49,23 @@ export class HUD {
     this.dialogue.innerHTML = `<div class="dlg-face">${name[0]}</div><div class="dlg-body"><b>${name} <i>${role}</i></b><span>${text}</span></div>`;
     this.dialogue.classList.add('show');
     this._dialogueT = 7;
+  }
+
+  // Open the weapon wheel (screenshot staging: the cover shows the wheel
+  // the way #5's does). Placed right of centre, not dead centre — the
+  // cover's hero and bridge sit centre-left, so the wheel goes over the
+  // open water on the right instead of covering the action.
+  showWeaponWheel() {
+    const g = this.game;
+    this.wheel.innerHTML = WEAPONS.map((w, i) => {
+      const mag = g.combat.inMag[i];
+      return `<div class="ww-slot"><b>${i + 1} · ${w.name}</b><span>${w.mag === Infinity ? '∞' : mag + ' / ' + g.combat.ammo[i]}</span></div>`;
+    }).join('');
+    this.wheel.classList.add('open');
+    // Upper-right, in the open sky — clear of the leaping car (the
+    // first spot, 76%/58%, put the wheel's slots over the car's nose).
+    this.wheel.style.left = '82%';
+    this.wheel.style.top = '40%';
   }
 
   banner(title, sub = '') {
@@ -183,8 +201,8 @@ export class HUD {
 
   drawMinimap() {
     const ctx = this.minimap.getContext('2d');
-    const S = 190;
-    const scale = 0.16; // px per metre
+    const S = 230; // FIX ROUND 2: was 190 — unreadable at 320px thumbnail.
+    const scale = 0.19; // px per metre (was 0.16)
     const g = this.game;
     const p = g.player;
     const cx = p.inCar ? p.inCar.pos.x : p.pos.x;
@@ -194,18 +212,22 @@ export class HUD {
     ctx.beginPath();
     ctx.arc(S / 2, S / 2, S / 2 - 2, 0, Math.PI * 2);
     ctx.clip();
-    // Water background.
-    ctx.fillStyle = '#1d6f7d';
+    // Water background: brighter teal so it reads as water at thumbnail size.
+    ctx.fillStyle = '#0e7a8a';
     ctx.fillRect(0, 0, S, S);
-    // Land.
-    ctx.fillStyle = '#8a7a6a';
-    for (const isl of [{ x0: -460, z0: -190, x1: -90, z1: 190 }, { x0: -70, z0: -160, x1: 230, z1: 160 }, { x0: 250, z0: -210, x1: 490, z1: 210 }]) {
+    // Land: tinted per island, so the archipelago reads as islands.
+    for (const isl of [
+      { x0: -460, z0: -190, x1: -90, z1: 190, c: '#b8a888' },
+      { x0: -70, z0: -160, x1: 230, z1: 160, c: '#d8c090' },
+      { x0: 250, z0: -210, x1: 490, z1: 210, c: '#a89880' },
+    ]) {
+      ctx.fillStyle = isl.c;
       ctx.fillRect(S / 2 + (isl.x0 - cx) * scale, S / 2 + (isl.z0 - cz) * scale, (isl.x1 - isl.x0) * scale, (isl.z1 - isl.z0) * scale);
     }
     const toMap = (x, z) => [S / 2 + (x - cx) * scale, S / 2 + (z - cz) * scale];
-    // Roads.
-    ctx.strokeStyle = '#3a3a42';
-    ctx.lineWidth = 3;
+    // Roads: thicker, near-black.
+    ctx.strokeStyle = '#2e2e38';
+    ctx.lineWidth = 4.5;
     for (const e of GRAPH.edges) {
       const [ax, ay] = toMap(e.ax, e.az);
       const [bx, by] = toMap(e.bx, e.bz);
@@ -214,11 +236,24 @@ export class HUD {
       ctx.lineTo(bx, by);
       ctx.stroke();
     }
-    // Traffic dots (faint).
-    ctx.fillStyle = 'rgba(230,230,230,0.55)';
+    // Wanted search zone (FIX ROUND 2): a dashed red circle around the
+    // player (the map is player-centred) while the heat is on.
+    if (g.police.stars > 0) {
+      ctx.beginPath();
+      ctx.setLineDash([7, 6]);
+      ctx.strokeStyle = '#ff4030';
+      ctx.lineWidth = 3;
+      ctx.arc(S / 2, S / 2, 120 * scale, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    // Traffic dots: opaque white, bigger.
+    ctx.fillStyle = '#ffffff';
     for (const c of g.traffic.cars) {
       const [x, y] = toMap(c.pos.x, c.pos.z);
-      ctx.fillRect(x - 1, y - 1, 2, 2);
+      ctx.beginPath();
+      ctx.arc(x, y, 2.5, 0, Math.PI * 2);
+      ctx.fill();
     }
     // Police (red) — always shown when wanted; with Kiki's reveal, all.
     const reveal = g.progression.revealUntil > g.time;
@@ -227,14 +262,14 @@ export class HUD {
       for (const u of g.police.units) {
         const [x, y] = toMap(u.pos.x, u.pos.z);
         ctx.beginPath();
-        ctx.arc(x, y, 3.4, 0, Math.PI * 2);
+        ctx.arc(x, y, 4.5, 0, Math.PI * 2);
         ctx.fill();
       }
       if (g.police.heli) {
         const [x, y] = toMap(g.police.heli.mesh.position.x, g.police.heli.mesh.position.z);
         ctx.fillStyle = '#ff9a3a';
         ctx.beginPath();
-        ctx.arc(x, y, 4.5, 0, Math.PI * 2);
+        ctx.arc(x, y, 5.5, 0, Math.PI * 2);
         ctx.fill();
       }
     }
@@ -246,7 +281,7 @@ export class HUD {
       ctx.save();
       ctx.translate(x, y);
       ctx.rotate(Math.PI / 4);
-      ctx.fillRect(-4, -4, 8, 8);
+      ctx.fillRect(-5.5, -5.5, 11, 11);
       ctx.restore();
     }
     // Player arrow (north-up).
@@ -255,17 +290,20 @@ export class HUD {
     ctx.translate(S / 2, S / 2);
     ctx.rotate(heading);
     ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = '#222222';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(0, -7);
-    ctx.lineTo(5, 6);
-    ctx.lineTo(-5, 6);
+    ctx.moveTo(0, -10);
+    ctx.lineTo(7, 8);
+    ctx.lineTo(-7, 8);
     ctx.closePath();
     ctx.fill();
+    ctx.stroke();
     ctx.restore();
     ctx.restore();
     // Rim.
     ctx.strokeStyle = 'rgba(255,194,122,0.9)';
-    ctx.lineWidth = 3;
+    ctx.lineWidth = 4;
     ctx.beginPath();
     ctx.arc(S / 2, S / 2, S / 2 - 2, 0, Math.PI * 2);
     ctx.stroke();

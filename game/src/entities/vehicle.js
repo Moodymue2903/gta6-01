@@ -174,12 +174,20 @@ export class Car {
       this.airborne = true;
       this.vy = Math.max(4, this.speed * 0.45);
     } else if (ground > 0) {
-      // On the ramp: climb it; leaving the lip at speed launches.
-      const wasY = this.pos.y;
+      // On the ramp: climb it; launch near the tip at speed — the leap.
       this.pos.y = ground;
-      if (ground - wasY > 0.12 && this.speed > 24) {
+      if (ground > 3 && this.speed > 24) {
         this.airborne = true;
         this.vy = this.speed * 0.42;
+      }
+    } else if (this.pos.y > 0.01) {
+      if (this.pos.y > 0.5 && this.speed > 10) {
+        // Drove off a raised lip (drawbridge tip) at speed: go airborne
+        // and keep flying instead of snapping down to the road.
+        this.airborne = true;
+        this.vy = Math.max(2, this.speed * 0.25);
+      } else {
+        this.pos.y = Math.max(0, this.pos.y - 8 * dt);
       }
     } else {
       this.pos.y = 0;

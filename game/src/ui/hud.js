@@ -4,8 +4,8 @@
 // small 2D canvas; the game canvas stays clean for the screenshots.
 
 import { GRAPH } from '../world/roadNetwork.js';
-import { CREW } from './progression.js';
-import { WEAPONS } from './combat.js';
+import { CREW } from '../systems/progression.js';
+import { WEAPONS } from '../systems/combat.js';
 
 function el(tag, id, parent, html = '') {
   const e = document.createElement(tag);
@@ -54,6 +54,13 @@ export class HUD {
     this.bannerEl.innerHTML = `<h2>${title}</h2><p>${sub}</p>`;
     this.bannerEl.classList.add('show');
     this._bannerT = 3.6;
+  }
+
+  // Hide the banner immediately (screenshot staging: the big title card
+  // would cover the middle of the frame).
+  clearBanner() {
+    this._bannerT = 0;
+    this.bannerEl.classList.remove('show');
   }
 
   flash(kind) {

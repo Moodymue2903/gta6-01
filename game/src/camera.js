@@ -3,7 +3,7 @@
 // higher on foot. Mouse drag orbits; the camera never goes under the ground.
 
 import * as THREE from 'three';
-import { clamp, lerp } from '../util.js';
+import { clamp, lerp } from './util.js';
 
 export class CameraCtl {
   constructor(game) {

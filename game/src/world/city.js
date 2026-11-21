@@ -37,12 +37,14 @@ class QuadSoup {
 }
 
 function windowTexture(base, lit) {
+  // Light base so the instance colour reads vividly; windows are dark
+  // glass with some lit warm, so towers read as coloured, not muddy.
   return canvasTexture(128, 256, (ctx, w, h) => {
     ctx.fillStyle = base;
     ctx.fillRect(0, 0, w, h);
     for (let y = 12; y < h - 10; y += 22) {
       for (let x = 10; x < w - 10; x += 18) {
-        ctx.fillStyle = Math.random() < 0.42 ? lit : '#2a2430';
+        ctx.fillStyle = Math.random() < 0.42 ? lit : '#33272e';
         ctx.fillRect(x, y, 10, 14);
       }
     }
@@ -51,7 +53,7 @@ function windowTexture(base, lit) {
 
 export function buildCity(scene, rng) {
   const colliders = [];
-  const animated = { ferris: null, ferrisCabins: [], beam: null, mastLight: null, bridgeLeaf: null, waterTex: null };
+  const animated = { ferris: null, ferrisCabins: [], beam: null, mastLight: null, bridgeLeafE: null, bridgeLeafW: null, waterTex: null };
 
   // --- Water: one big teal plane with a scrolling wave texture. ---
   const waterTex = canvasTexture(256, 256, (ctx, w, h) => {
@@ -99,19 +101,25 @@ export function buildCity(scene, rng) {
   beach.position.set(80, 0.02, 137);
   beach.receiveShadow = true;
   scene.add(beach);
-  // Causeway decks.
-  for (const c of CAUSEWAYS) {
-    const w = c.x1 - c.x0;
-    const d = c.z1 - c.z0;
-    const deck = new THREE.Mesh(
-      new THREE.PlaneGeometry(w, d),
-      new THREE.MeshLambertMaterial({ color: 0x6a5a52 }),
-    );
-    deck.rotation.x = -Math.PI / 2;
-    deck.position.set((c.x0 + c.x1) / 2, 0.05, (c.z0 + c.z1) / 2);
-    deck.receiveShadow = true;
-    scene.add(deck);
-  }
+  // Causeway decks: west causeway whole; east causeway only the approach
+  // west of the drawbridge leaves (the leaves are the road over the span).
+  const westDeck = new THREE.Mesh(
+    new THREE.PlaneGeometry(20, 28),
+    new THREE.MeshLambertMaterial({ color: 0x6a5a52 }),
+  );
+  westDeck.rotation.x = -Math.PI / 2;
+  westDeck.position.set(-80, 0.05, 0);
+  westDeck.receiveShadow = true;
+  scene.add(westDeck);
+  const eastApproach = new THREE.Mesh(
+    new THREE.PlaneGeometry(2, 28),
+    new THREE.MeshLambertMaterial({ color: 0x6a5a52 }),
+  );
+  eastApproach.rotation.x = -Math.PI / 2;
+  eastApproach.position.set(231, 0.05, 0);
+  eastApproach.receiveShadow = true;
+  scene.add(eastApproach);
+  void CAUSEWAYS;
 
   // --- Roads + sidewalks, merged into two meshes. ---
   const roadSoup = new QuadSoup();
@@ -178,8 +186,10 @@ export function buildCity(scene, rng) {
         if (!isLand(x, z)) continue;
         const near = nearestRoadPoint(x, z);
         if (near.dist < 12) continue;
-        if (Math.hypot(x - 140, z - 135) < 30) continue; // ferris wheel clearing
+        if (Math.hypot(x - 60, z + 120) < 30) continue; // ferris wheel clearing
         if (Math.hypot(x - 470, z + 195) < 16) continue; // lighthouse clearing
+        if (Math.hypot(x - 250, z) < 75) continue; // drawbridge landing plaza (keeps the leap's sightline open)
+        if (Math.hypot(x + 80, z) < 30) continue; // west causeway mouth
         plots.push({
           x, z,
           w: rand(plotRng, 12, 22),
@@ -191,9 +201,9 @@ export function buildCity(scene, rng) {
     }
   }
   const classes = [
-    { max: 18, tex: windowTexture('#c9a58a', '#ffd9a0') },
-    { max: 40, tex: windowTexture('#a88a9e', '#ffce8a') },
-    { max: 999, tex: windowTexture('#8a7a9e', '#ffe0b0') },
+    { max: 18, tex: windowTexture('#f2e8d8', '#ffd9a0') },
+    { max: 40, tex: windowTexture('#efe0d0', '#ffce8a') },
+    { max: 999, tex: windowTexture('#e8d8e8', '#ffe0b0') },
   ];
   const buckets = [[], [], []];
   for (const p of plots) {
@@ -284,8 +294,9 @@ export function buildCity(scene, rng) {
 
   // --- Landmarks. ---
   // Ferris wheel on the beach (rotates slowly; cabins stay upright).
+  // Northwest of the boardwalk, so it reads in the westbound cover shot.
   const wheel = new THREE.Group();
-  wheel.position.set(140, 0, 138);
+  wheel.position.set(60, 0, -120);
   const wheelMat = new THREE.MeshLambertMaterial({ color: 0xff8a6a, emissive: 0x442211, emissiveIntensity: 0.4 });
   const rim = new THREE.Mesh(new THREE.TorusGeometry(17, 0.55, 8, 40), wheelMat);
   rim.position.y = 20;
@@ -406,25 +417,27 @@ export function buildCity(scene, rng) {
   scene.add(mast);
   animated.mastLight = mastLight;
 
-  // --- Drawbridge leaf on the east causeway. ---
-  const leafGeo = new THREE.BoxGeometry(12, 0.9, 13.4);
-  leafGeo.translate(6, 0, 0); // hinge at x = 232
-  const leaf = new THREE.Mesh(leafGeo, new THREE.MeshLambertMaterial({ color: 0x8a7a6a }));
-  leaf.position.set(232, 0.5, 0);
-  leaf.castShadow = true;
-  leaf.receiveShadow = true;
-  scene.add(leaf);
-  animated.bridgeLeaf = leaf;
-  // Bridge towers flanking the span.
-  for (const s of [-1, 1]) {
-    const tower = new THREE.Mesh(
-      new THREE.BoxGeometry(3, 16, 3),
-      new THREE.MeshLambertMaterial({ color: 0x6a5a52 }),
-    );
-    tower.position.set(238, 8, s * 9);
-    tower.castShadow = true;
-    scene.add(tower);
-  }
+  // --- Drawbridge leaves on the east causeway (two steel leaves). ---
+  const leafMat = new THREE.MeshLambertMaterial({ color: 0x8a7a6a });
+  const leafEGeo = new THREE.BoxGeometry(8, 0.4, 13.4);
+  leafEGeo.translate(4, 0, 0); // hinge at x = 232
+  const leafE = new THREE.Mesh(leafEGeo, leafMat);
+  leafE.position.set(232, 0.12, 0);
+  leafE.castShadow = true;
+  leafE.receiveShadow = true;
+  scene.add(leafE);
+  const leafWGeo = new THREE.BoxGeometry(8, 0.4, 13.4);
+  leafWGeo.translate(-4, 0, 0); // hinge at x = 252
+  const leafW = new THREE.Mesh(leafWGeo, leafMat);
+  leafW.position.set(252, 0.12, 0);
+  leafW.castShadow = true;
+  leafW.receiveShadow = true;
+  scene.add(leafW);
+  animated.bridgeLeafE = leafE;
+  animated.bridgeLeafW = leafW;
+  // (No bridge towers: they sit exactly where the cover camera goes and
+  // would fill the frame as a dark slab. The raised leaves + gap + water
+  // carry the bridge read on their own.)
 
   // Key locations for spawn, missions and saves.
   const spots = {
@@ -439,6 +452,7 @@ export function buildCity(scene, rng) {
   };
 
   // Drawbridge state machine: down -> raising -> up -> lowering -> down.
+  // Up means both leaves raised: two ramps with open water between them.
   const bridge = {
     state: 'down',
     timer: 55,
@@ -448,17 +462,20 @@ export function buildCity(scene, rng) {
     heightAt(x, z) {
       if (!this.up) return 0;
       if (z < DRAWBRIDGE.z0 || z > DRAWBRIDGE.z1) return 0;
-      if (x >= DRAWBRIDGE.x0 && x < DRAWBRIDGE.lipX) {
-        return ((x - DRAWBRIDGE.x0) / (DRAWBRIDGE.lipX - DRAWBRIDGE.x0)) * DRAWBRIDGE.height;
+      if (x >= DRAWBRIDGE.x0 && x < DRAWBRIDGE.gap0) {
+        return ((x - DRAWBRIDGE.x0) / (DRAWBRIDGE.gap0 - DRAWBRIDGE.x0)) * DRAWBRIDGE.height;
       }
-      if (x >= DRAWBRIDGE.lipX && x < DRAWBRIDGE.x1) return -999;
+      if (x >= DRAWBRIDGE.gap0 && x < DRAWBRIDGE.gap1) return -999;
+      if (x >= DRAWBRIDGE.gap1 && x < DRAWBRIDGE.x1) {
+        return ((DRAWBRIDGE.x1 - x) / (DRAWBRIDGE.x1 - DRAWBRIDGE.gap1)) * DRAWBRIDGE.height;
+      }
       return 0;
     },
     update(dt) {
       if (this.forceUp) {
         this.state = 'up';
         this.up = true;
-        this.angle = -0.42;
+        this.angle = 0.55;
         return;
       }
       this.timer -= dt;
@@ -477,7 +494,7 @@ export function buildCity(scene, rng) {
         this.state = 'down';
         this.timer = 60;
       }
-      const target = this.state === 'up' || this.state === 'raising' ? -0.42 : 0;
+      const target = this.state === 'up' || this.state === 'raising' ? 0.55 : 0;
       this.angle += (target - this.angle) * Math.min(1, dt * 2.5);
     },
   };
@@ -489,7 +506,8 @@ export function buildCity(scene, rng) {
     groundHeightAt: (x, z) => bridge.heightAt(x, z),
     update(dt, t) {
       bridge.update(dt);
-      animated.bridgeLeaf.rotation.z = bridge.angle;
+      animated.bridgeLeafE.rotation.z = bridge.angle;
+      animated.bridgeLeafW.rotation.z = -bridge.angle;
       if (animated.ferris) {
         animated.ferris.rotation.z -= dt * 0.12;
         const a = animated.ferris.rotation.z;

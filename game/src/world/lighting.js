@@ -51,7 +51,7 @@ export function buildLighting(scene) {
   scene.add(sky);
 
   // Warm haze so the far skyline melts into the light.
-  scene.fog = new THREE.Fog(PALETTE.fog, 220, 1100);
+  scene.fog = new THREE.Fog(PALETTE.fog, 220, 1500);
 
   // Golden-hour sun, low from the west.
   const sun = new THREE.DirectionalLight(0xffc27a, 2.6);

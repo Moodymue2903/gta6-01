@@ -34,21 +34,16 @@ function makeHeliMesh() {
   rotor.add(blade2);
   g.add(rotor);
   // Searchlight cone: apex at the heli, base on the ground below the player.
-  const coneGeo = new THREE.ConeGeometry(7, 46, 14, 1, true);
+  // Narrow beam (4.5 m radius) so it reads as a diagonal slash, not a wash.
+  const coneGeo = new THREE.ConeGeometry(4.5, 46, 14, 1, true);
   coneGeo.translate(0, -23, 0);
   const cone = new THREE.Mesh(
     coneGeo,
-    new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.13, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    new THREE.MeshBasicMaterial({ color: 0xfff2b0, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
   );
   cone.rotation.x = -Math.PI / 2;
   g.add(cone);
-  const pool = new THREE.Mesh(
-    new THREE.CircleGeometry(6.5, 20),
-    new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.22, blending: THREE.AdditiveBlending, depthWrite: false }),
-  );
-  pool.rotation.x = -Math.PI / 2;
-  g.add(pool);
-  g.userData = { rotor, cone, pool };
+  g.userData = { rotor, cone };
   return g;
 }
 
@@ -104,13 +99,22 @@ export class Police {
   spawnHeli() {
     const mesh = makeHeliMesh();
     this.game.scene.add(mesh);
-    this.heli = { mesh, angle: 0 };
+    // Light pool: a flat disc on the ground under the player, kept at
+    // scene level so it stays flat while the heli group pitches to look.
+    const pool = new THREE.Mesh(
+      new THREE.CircleGeometry(6.5, 20),
+      new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.25, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    pool.rotation.x = -Math.PI / 2;
+    this.game.scene.add(pool);
+    this.heli = { mesh, pool, angle: 0 };
     this.game.audio?.blip('heli');
   }
 
   despawnHeli() {
     if (!this.heli) return;
     this.game.scene.remove(this.heli.mesh);
+    this.game.scene.remove(this.heli.pool);
     this.heli = null;
   }
 
@@ -251,9 +255,7 @@ export class Police {
       h.mesh.position.set(hx, 44, hz);
       h.mesh.lookAt(pPos.x, 0, pPos.z);
       h.mesh.userData.rotor.rotation.y += dt * 22;
-      h.mesh.userData.pool.position.set(pPos.x - hx, -44 + 0.15, pPos.z - hz);
-      h.mesh.userData.pool.rotation.set(0, 0, 0);
-      h.mesh.userData.pool.lookAt(0, 1, 0);
+      h.pool.position.set(pPos.x, 0.15, pPos.z);
     }
 
     // Busted: caught on foot, or boxed in while stopped in a car.

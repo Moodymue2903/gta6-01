@@ -15,10 +15,11 @@ export const CAUSEWAYS = [
   { name: 'east-causeway', x0: 230, z0: -14, x1: 250, z1: 14 },
 ];
 
-// The drawbridge span on the east causeway: a ramp cars can launch off.
-// x 232..240 climbs 0 -> 5 m, x 240..244 is open water (the gap), x >= 244
-// is flat road again. When the bridge is DOWN the whole span is flat.
-export const DRAWBRIDGE = { x0: 232, x1: 244, lipX: 240, height: 5, z0: -7, z1: 7 };
+// The drawbridge span on the east causeway: two leaves that rise to a
+// jump. East leaf climbs 232->240, west leaf climbs 252->244, and the
+// 4 m gap between their tips (240..244) is open water when the bridge is UP.
+// Cars at speed launch off a leaf tip and fly the gap.
+export const DRAWBRIDGE = { x0: 232, x1: 252, gap0: 240, gap1: 244, height: 4.5, z0: -7, z1: 7 };
 
 export function isLand(x, z) {
   for (const r of ISLANDS) {
@@ -34,14 +35,17 @@ export function isWater(x, z) {
   return !isLand(x, z);
 }
 
-// Ground height: 0 everywhere except the drawbridge ramp when raised.
+// Ground height: 0 everywhere except the drawbridge ramps when raised.
 export function groundHeightAt(x, z, bridgeUp) {
   if (!bridgeUp) return 0;
   if (z < DRAWBRIDGE.z0 || z > DRAWBRIDGE.z1) return 0;
-  if (x >= DRAWBRIDGE.x0 && x < DRAWBRIDGE.lipX) {
-    return ((x - DRAWBRIDGE.x0) / (DRAWBRIDGE.lipX - DRAWBRIDGE.x0)) * DRAWBRIDGE.height;
+  if (x >= DRAWBRIDGE.x0 && x < DRAWBRIDGE.gap0) {
+    return ((x - DRAWBRIDGE.x0) / (DRAWBRIDGE.gap0 - DRAWBRIDGE.x0)) * DRAWBRIDGE.height;
   }
-  if (x >= DRAWBRIDGE.lipX && x < DRAWBRIDGE.x1) return -999; // the gap: no ground
+  if (x >= DRAWBRIDGE.gap0 && x < DRAWBRIDGE.gap1) return -999; // the gap: no ground
+  if (x >= DRAWBRIDGE.gap1 && x < DRAWBRIDGE.x1) {
+    return ((DRAWBRIDGE.x1 - x) / (DRAWBRIDGE.x1 - DRAWBRIDGE.gap1)) * DRAWBRIDGE.height;
+  }
   return 0;
 }
 

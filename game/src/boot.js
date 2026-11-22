@@ -21,7 +21,15 @@ import { ActivityRegistry } from './systems/activities/activityRegistry.js';
 import { buildFlares, updateFlares } from './systems/activities/signalFlares.js';
 import { updateImpound } from './systems/activities/impoundRuns.js';
 import { AudioSys } from './systems/audio.js';
-import { HUD } from './ui/hud.js';
+import { WeaponWheel } from './systems/weaponWheel.js';
+import { CrewAbilities } from './systems/crewAbilities.js';
+import { MissionComms } from './systems/missionComms.js';
+import { Radio } from './systems/radio.js';
+import { PopulationDirector } from './world/populationDirector.js';
+import { buildHarbourLandmarks } from './world/harbourLandmarks.js';
+import { buildRoyalPalms } from './world/palmTrees.js';
+import { buildWaterSurface } from './world/waterSurface.js';
+import { HUD } from './ui/hudV2.js';
 import { Menus } from './ui/menus.js';
 import { Input } from './input.js';
 import { CameraCtl } from './camera.js';
@@ -65,6 +73,13 @@ class Game {
 
     this.lighting = buildLighting(this.scene);
     this.city = buildCity(this.scene, this.rng, this);
+    // FIX ROUND 7 — harbour identity: copper tidal gate, royal palms,
+    // animated water. Built right after the city so the landmarks sit
+    // under the traffic/police layers that follow.
+    this.landmarks = buildHarbourLandmarks(this);
+    this.palms2 = buildRoyalPalms(this);
+    this.water = buildWaterSurface(this);
+    this.timeScale = 1;
     this.roads = { nearestRoadPoint };
     this.input = new Input();
     this.cameraCtl = new CameraCtl(this);
@@ -88,6 +103,15 @@ class Game {
     this.updateFlares = () => updateFlares(this);
     this.updateImpound = () => updateImpound(this);
     this.audio = new AudioSys(this);
+    // FIX ROUND 7 — the new systems: weapon wheel, crew abilities,
+    // mission comms, radio, population director. All constructed after
+    // the systems they observe (combat, progression, missions, audio,
+    // peds) so their constructors can read live state.
+    this.weaponWheel = new WeaponWheel(this);
+    this.crewAbilities = new CrewAbilities(this);
+    this.missionComms = new MissionComms(this);
+    this.radio = new Radio(this);
+    this.population = new PopulationDirector(this);
     this.hud = new HUD(this);
     this.menus = new Menus(this);
 
@@ -104,7 +128,7 @@ class Game {
 
     // FIX ROUND 3 — the garage mechanic: a static ped who never leaves
     // the Motor Works. Beside the pad (west side), facing the car.
-    this.peds.spawnStatic(47.5, 128, Math.PI / 2);
+    this.peds.spawnStatic(47.5, 128, Math.PI / 2, 0x8a6a3a); // Lo, olive shirt (his cap colour); the 4th arg was missing, so makePedMesh built his body with color: undefined (the "THREE.Material: parameter 'color' has value of undefined" warning on every load, and a white body)
 
     // Hero contact shadow: one dark ellipse on the surface below the
     // player (car or on foot). It grounds the hero, and on the cover
@@ -157,6 +181,7 @@ class Game {
       player.update(dt, input);
     }
     this.traffic.update(dt);
+    this.population.update(dt);
     this.peds.update(dt);
     this.police.update(dt);
     this.missions.update(dt);
@@ -164,7 +189,14 @@ class Game {
     // the activity registry counts real events, not scripted ones.
     this.activities.update(dt);
     this.combat.update(dt, input);
+    // FIX ROUND 7 — the new systems run every tick (the wheel reads
+    // input here, so its Q-hold works in live play and in staging).
+    this.weaponWheel.update(dt, input);
+    this.crewAbilities.update(dt);
+    this.missionComms.update(dt);
+    this.radio.update(dt);
     this.city.update(dt, this.time);
+    this.water.update(dt);
     this.audio.update(dt);
     const focus = player.inCar ? player.inCar.pos : player.pos;
     this.lighting.update(dt, this.time, focus);
@@ -360,10 +392,14 @@ class Game {
     if (input.pressed('KeyZ')) this.progression.useCrew('mira');
     if (input.pressed('KeyX')) this.progression.useCrew('lo');
     if (input.pressed('KeyC')) this.progression.useCrew('kiki');
-    if (input.pressed('Digit1')) this.combat.select(0);
-    if (input.pressed('Digit2')) this.combat.select(1);
-    if (input.pressed('Digit3')) this.combat.select(2);
-    if (input.pressed('Digit4')) this.combat.select(3);
+    // FIX ROUND 7 — while the weapon wheel is open, keys 1-4 only
+    // highlight a slot in the wheel; the wheel equips on release (Q).
+    if (!this.weaponWheel?.open) {
+      if (input.pressed('Digit1')) this.combat.select(0);
+      if (input.pressed('Digit2')) this.combat.select(1);
+      if (input.pressed('Digit3')) this.combat.select(2);
+      if (input.pressed('Digit4')) this.combat.select(3);
+    }
     // Interaction prompt.
     if (!this.player.inCar) {
       const car = this.nearestCar(4.5);
@@ -400,7 +436,10 @@ function frame(now) {
   last = now;
   game.handleKeys();
   if (game.state === 'playing') {
-    acc += dt;
+    // FIX ROUND 7 — slow-mo while the weapon wheel is open: the wheel
+    // sets game.timeScale = 0.35, and the sim accumulator scales with
+    // it (camera/HUD keep wall dt, so only the world slows).
+    acc += dt * (game.timeScale ?? 1);
     let n = 0;
     while (acc >= STEP && n < 5) {
       game.stepSim(STEP);

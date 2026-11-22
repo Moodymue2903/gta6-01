@@ -530,6 +530,10 @@ export class Police {
       name: u.unit.name,
       dist: Math.round(Math.hypot(u.pos.x - pPos.x, u.pos.z - pPos.z)),
       state: u.unit.state === 'roadblock' ? 'ROADBLOCK' : u.unit.state === 'flank' ? 'FLANKING' : u.unit.kind === 'swat' ? 'SWAT' : 'RAMMING',
-    }));
+      // FIX ROUND 7 — the roster panel shows the NEAREST units first
+      // (it takes the first four): unsorted, the first four were spawn
+      // order, so a roadblock 18 m away could sit behind a SWAT unit
+      // 153 m out. Sorting by distance makes the panel honest.
+    })).sort((a, b) => a.dist - b.dist);
   }
 }

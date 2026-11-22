@@ -4,37 +4,75 @@
 // the camera, then freezes the sim and raises window.__shotReady so the
 // screenshot driver can capture a real render — never a composite.
 //
-// FIX ROUND 5 — one consistent run, four frames from it (see
+// FIX ROUND 7 — one consistent run, four frames from it (see
 // shotDirector.js: jobs 1-7 done, four exports, three flares, three
 // stunts, nine crew uses, three saves — 74.5%, V$13,850, ENFORCER):
-//   1. cover — THE CAUSEWAY INTERCEPT: the grounded sunset chase
-//      (fix 6 finish): the hero big in the right foreground on the wet
-//      causeway at top speed, its bright tail bar and glass reading
-//      as a car's rear; the nearest cruiser tucked smaller up-road
-//      behind it in the north lane, the oncoming interceptor and the
-//      roadblock further up-road, the heli high and restrained, the
-//      port (ship, cranes) on the right — 5-star heat, no leap, no
-//      palms in the sightline, no cream box blocking the port.
+//   1. cover — THE CAUSEWAY LEAP: the coral Comet GT AIRBORNE over
+//      the raised drawbridge gap at the copper tidal gate, front
+//      quarter + sunlit south flank to the south-side camera, the
+//      chase converging from the west (chaser, interceptor, roadblock
+//      at the gate), the heli high and restrained, the port (ship,
+//      cranes) on the right — 5-star heat, job 8 KINGPIN, Mira's
+//      dialogue card, crew portrait cards, radio pill, weapon slots
+//      (SMG equipped), square minimap, dispatch panel. The leap is
+//      the game's iconic verb and job 8's briefing ("the drawbridge
+//      is up, so you leap it"); the fix-6 grounded cover is kept as
+//      the fallback if the leap does not read in the render.
+//      NOTE (round 7): a literal front three-quarter (camera west of
+//      the hero, on its nose) would put the tidal gate and the
+//      roadblock behind the camera, so the cover keeps the south-side
+//      camera family and the gate + chase in frame instead.
 //   2. combat — YARD AMBUSH: the container yard at midday, third-person
 //      over-shoulder, one profile shot at tick 149 (fresh tracer +
 //      muzzle flash), 3/6 guards down, a dock worker on the phone
-//      (witness) + fleeing peds. NO steal-car prompt, NO dialogue.
+//      (witness) + fleeing peds, the WEAPON WHEEL OPEN on the SMG.
+//      NO steal-car prompt, NO dialogue.
 //   3. career — THE EMPIRE: the career pause menu over a REAL daytime
 //      aerial render, 74.5% COMPLETE, 3 live save slots, crew, the
-//      small tinted district map. NO wireframe map, NO flat navy.
+//      small tinted district map, the four activity groups
+//      (Story/Street/Exploration/Empire) + the act title. NO wireframe
+//      map, NO flat navy.
 //   4. garage — MOTOR WORKS: the car on the lift in the real interior,
 //      warm bay lights, engine tune bought for real (V$9,850 left),
-//      condition 75%, the 5 priced upgrades with stat bars.
-// No frame shows dialogue text: the mission briefings are cleared at
-// the freeze, so the frames read as pictures, not chat logs.
+//      condition 75%, the 5 priced upgrades with stat bars, the
+//      UPGRADES | WEAPONS tab header. The frame shows the UPGRADES tab.
+// The cover frame shows dialogue (Marco's KINGPIN line, pinned by
+// missionComms); the other frames clear it, so they read as pictures,
+// not chat logs.
 
 import * as THREE from 'three';
 import { Car } from './entities/vehicle.js';
 import { stageRun, completeJob, dumpState } from './world/shotDirector.js';
-import { stageCoverDensity, stageYardDensity } from './world/density_spawner.js';
+import { stageYardDensity } from './world/density_spawner.js';
 import { applyMidday, applyGolden } from './world/skyAndLight.js';
 import { tintedGlassMaterial } from './world/vehicleMaterials.js';
 import { fireProfileShot } from './systems/combat/tracers.js';
+
+// FIX ROUND 7 — screen-space overlap check (plan requirement): project
+// the 8 corners of each car's world AABB to NDC and return the
+// intersection area as a fraction of a's box area. The cover fails if
+// the hero overlaps any police unit by more than 10%.
+function screenOverlap(g, a, b) {
+  const boxOf = (car) => {
+    const box = new THREE.Box3().setFromObject(car.mesh);
+    const pts = [];
+    for (const x of [box.min.x, box.max.x]) for (const y of [box.min.y, box.max.y]) for (const z of [box.min.z, box.max.z]) {
+      const v = new THREE.Vector3(x, y, z).project(g.camera);
+      if (v.z < 1) pts.push(v);
+    }
+    if (!pts.length) return null;
+    const xs = pts.map((v) => v.x);
+    const ys = pts.map((v) => v.y);
+    return { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys) };
+  };
+  const A = boxOf(a);
+  const B = boxOf(b);
+  if (!A || !B) return 0;
+  const ox = Math.max(0, Math.min(A.x1, B.x1) - Math.max(A.x0, B.x0));
+  const oy = Math.max(0, Math.min(A.y1, B.y1) - Math.max(A.y0, B.y0));
+  const areaA = (A.x1 - A.x0) * (A.y1 - A.y0);
+  return areaA > 0 ? (ox * oy) / areaA : 0;
+}
 
 export function stageShot(kind, game) {
   const g = game;
@@ -43,19 +81,14 @@ export function stageShot(kind, game) {
   g.audio.setRadio(0);
 
   if (kind === 'cover') {
-    // THE CAUSEWAY INTERCEPT: GROUNDED, at speed, westbound into the
-    // sunset — FIX ROUND 6 replaces the fix-4/5 leap. The leap read as
-    // a physics glitch (nose-up car over a broken span, flat orange
-    // sky, a spotlight wedge for a composition), so the cover is now
-    // the target's shot: the hero car flat on the wet causeway with
-    // its contact shadow under it, a cruiser tight on its tail, an
-    // oncoming interceptor ahead with its headlights on, the roadblock
-    // beyond the lowered drawbridge, the heli high with a restrained
-    // beam, and the port (cranes, cargo ship) on the right. The run
-    // underneath is the real late-game run (74.5%, V$13,850); JOB 8
-    // starts on top of it. The drive loop below is kept verbatim from
-    // fix 5 (same ticks, same 17:59 clock) — it only advances the
-    // world; every pose is re-staged after it, grounded.
+    // THE CAUSEWAY LEAP (FIX ROUND 7): the coral Comet GT airborne
+    // over the raised drawbridge gap at the copper tidal gate, the
+    // chase converging from the west, the heli high and restrained,
+    // the port (cranes, cargo ship) on the right. The run underneath
+    // is the real late-game run (74.5%, V$13,850); JOB 8 starts on
+    // top of it. The drive loop below is kept verbatim from fix 5
+    // (same ticks, same 17:59 clock) — it only advances the world;
+    // the leap pose is frozen explicitly after it, at the apex.
     applyGolden(g);
     const { runCar } = stageRun(g);
     g.missions.start(8);
@@ -69,66 +102,85 @@ export function stageShot(kind, game) {
     runCar.vy = 0;
     runCar.syncMesh();
     g.player.pos.set(270, 0, 0);
-    // The roadblock is BEYOND THE LOWERED BRIDGE (x 228, across the
-    // road, head-on to the incoming hero): the interception the hero
-    // is driving into, on flat road.
-    for (const s of [-1, 1]) {
-      const rb = new Car(g, 'sedan', 0xf2f2f2, 228, s * 3.4, Math.PI / 2, true);
+    // The roadblock is AT THE TIDAL GATE (x 202-208, bracketing the
+    // gate arch at x 210, across the road, head-on to the incoming
+    // hero): the interception the hero is leaping toward, staggered
+    // either side of the gate so the two cars do not stack in the
+    // frame. Kept by reference so the de-conflict below moves only
+    // the police AI's spawned roadblock units, never these two.
+    const stagedRoadblocks = [];
+    for (const [x, z] of [[202, -2], [208, 3.4]]) {
+      const rb = new Car(g, 'sedan', 0xf2f2f2, x, z, Math.PI / 2, true);
       rb.unit = { name: 'ROADBLOCK', state: 'roadblock', kind: 'cruiser', blockTarget: null, ramCooldown: 0 };
       rb.speed = 0;
       g.police.units.push(rb);
+      stagedRoadblocks.push(rb);
     }
+    // FIX ROUND 7 — the cover fights with the MAKO SMG equipped (the
+    // weapon slots show it highlighted, 30/180), not bare fists.
+    g.combat.select(2);
     // The chase cars (tight chaser behind, oncoming interceptor
     // ahead) are staged AFTER the drive loop below, so the loop's
     // ticks cannot drive them off their marks — they are frozen poses,
     // not pursuers mid-sim.
     // Density: 8 cars pulled onto the causeway, a 6-car braked queue
-    // with brake lights on, a scooter filtering past, 16 peds on the
-    // promenade (6 bolting). The bridge is a street, not an empty set.
-    stageCoverDensity(g);
-    // Run the sim: the car climbs the west leaf and launches. This
+    // with brake lights on, 2 scooters filtering past, 16 peds on the
+    // promenade (6 bolting) + 8 archetype peds (tourists, skaters,
+    // lookouts) on the promenade edges. The bridge is a street, not
+    // an empty set. (FIX ROUND 7: stageCoverCrowd wraps the fix-6
+    // density with the population director's crowd.)
+    g.population.stageCoverCrowd(g);
+    // Run the sim: the car climbs the east leaf and launches. This
     // loop is verbatim fix 5 — it only advances the world (traffic,
-    // fleeing peds, converging units, the 17:59 clock). Every pose
-    // below is re-staged after it, grounded, so the leap it ends in
-    // never reaches the frame.
+    // fleeing peds, converging units, the 17:59 clock). It breaks the
+    // moment the car is airborne and rising just past the gap's west
+    // edge (x <= 240) — the leap's readable instant, still climbing,
+    // over the open water, with the gate and the roadblock ahead.
+    // (FIX ROUND 7: the first version of this branch broke at the
+    // apex and then overrode the pose with a guessed (236, 2.2, 0) —
+    // that point sits ON the west leaf's surface (2.25 m), and the
+    // south-east camera saw the east leaf as a giant tan wall. The
+    // apex is far west and high; the fix-5 break is the right instant,
+    // and the pose below keeps the sim's true position.)
     g.scriptedDrive = { throttle: 1, steer: 0, handbrake: false };
     for (let i = 0; i < 300; i++) {
       g.stepSim(1 / 60);
       if (runCar.airborne && runCar.vy > 0 && runCar.pos.x <= 240) break;
     }
     g.scriptedDrive = null;
-    // Lower the drawbridge for the grounded chase: the raised leaves
-    // + gap are the leap's geometry, and a grounded car driving at a
-    // raised bridge reads as the same broken causeway. The bridge
-    // lowers on its own timer in live play too; here it is lowered
-    // for the frame, and the leaves are rotated down with city
-    // updates (which move nothing else — no traffic, peds or police).
-    g.city.bridge.forceUp = false;
-    g.city.bridge.up = false;
-    g.city.bridge.state = 'down';
-    g.city.bridge.timer = 60;
-    for (let i = 0; i < 120; i++) g.city.update(1 / 60, g.time);
-    // Re-ground the hero: flat on the east approach at (258,0,0) —
-    // inside the Ochre Causeway district, so the street ribbon reads
-    // the causeway, not Key Westyard — westbound at top speed
-    // (43 m/s reads 155 km/h), pitch zero, wheels on the road. The
-    // contact shadow is reset under it by hand — stepSim is not run
-    // again, so the blob would otherwise sit where the leap left it,
-    // over the gap — and it sits at y 0.09, above the wet band.
-    runCar.pos.set(258, 0, 0);
-    runCar.heading = -Math.PI / 2;
+    // The bridge STAYS UP for the leap: the raised leaves + gap are
+    // the leap's geometry (job 8: "the drawbridge is up, so you leap
+    // it"). The fix-6 cover lowered it because that cover was
+    // grounded; a grounded car driving at a raised bridge read as a
+    // broken causeway. Here the hero is airborne over the gap, so the
+    // raised bridge is the jump, not a defect.
+    // Freeze the leap at the sim's true position (just past the gap,
+    // still climbing): only the heading (a slight drift angle, so the
+    // south flank and the front quarter read to the south-side camera)
+    // and the pitch are set for the frame. If the loop never launched
+    // the car, fall back to an explicit pose over the gap.
+    if (!runCar.airborne) {
+      runCar.pos.set(242, 5.5, 0);
+      runCar.airborne = true;
+      runCar.vy = 0;
+    }
+    runCar.heading = -Math.PI / 2 + 0.35;
     runCar.speed = 43;
-    runCar.airborne = false;
-    runCar.vy = 0;
-    runCar.pitch = 0;
+    runCar.pitch = 0.14;
     runCar.syncMesh();
-    g.player.pos.set(258, 0, 0);
-    g.heroBlob.position.set(258, 0.09, 0);
+    g.player.pos.set(runCar.pos.x, runCar.pos.y, runCar.pos.z);
+    // The contact shadow sits on the surface below the car — the west
+    // leaf (its height at the hero's x), not the water: the hero is
+    // just past the gap, over the leaf, so the shadow grounds the leap
+    // on the leaf it just left. (The first round-7 version put it on
+    // the water at y -1.1, below the leaf, so it was invisible and the
+    // car read as floating.) If the hero were over the open gap
+    // (heightAt -999), the shadow falls on the water instead.
+    const gh = g.city.groundHeightAt(runCar.pos.x, runCar.pos.z);
+    g.heroBlob.position.set(runCar.pos.x, (gh === -999 ? -1.1 : gh + 0.06), runCar.pos.z);
     g.heroBlob.scale.set(4.3 * 0.62, 2.0 * 0.75, 1);
-    // FIX ROUND 6 (finish): 0.55 was too faint to ground the car at
-    // this range — the hero floated. 0.68 reads as a real contact
-    // shadow under a car at speed.
-    g.heroBlob.material.opacity = 0.68;
+    g.heroBlob.material.opacity = 0.25;
+    console.log('[cover-leap] hero pos=' + runCar.pos.x.toFixed(1) + ',' + runCar.pos.y.toFixed(1) + ',' + runCar.pos.z.toFixed(1) + ' airborne=' + runCar.airborne + ' vy=' + runCar.vy.toFixed(1));
     // Hero rear separation (FIX ROUND 6 finish): from behind, the
     // sports body reads as one flat orange face — the dim corner
     // taillights (0x881111) do not separate it. A full-width bright
@@ -151,42 +203,36 @@ export function stageShot(kind, game) {
       rearGlass.position.set(-1.23, 0.98, 0);
       runCar.mesh.add(rearGlass);
     }
-    // The chase, frozen (FIX ROUND 6 finish): the fix-5/6 chaser sat
-    // at (260,-2.4) — 2 m astern of the hero and 2.4 m north — so from
-    // the rear camera it was the same distance as the hero, the same
-    // size, and brighter white: it read as the hero's co-star, not its
-    // pursuer. A literally-astern cruiser cannot be framed smaller
-    // than the hero from a rear camera on a straight road (it is
-    // always on the camera's side of the hero), so the nearest unit
-    // sits where the frame reads it as behind: up-road in the north
-    // lane at (252,-3.2), 6 m past the hero and 3.2 m north — further
-    // from the lens than the hero, ~half its size, its roof and light
-    // bar tucked behind the hero's roofline, still state 'pursue' on
-    // the roster. The interceptor and the roadblock stay where they
-    // were: 24 m and 30 m up-road, small, the trap the hero is
-    // driving into. (The interceptor sits on the lowered east leaf
-    // (its top is at y 0.32), so its height is set to the leaf, not
-    // the road.)
-    const chaser = new Car(g, 'sedan', 0xf2f2f2, 252, -3.2, -Math.PI / 2, true);
+    // The chase, frozen (FIX ROUND 7): the hero leaps at (236, 2.2, 0)
+    // and the police converge from the west, spread across the frame
+    // so no unit stacks on the hero (the screen-space overlap check
+    // at the end of this branch measures it): the chaser up-road in
+    // the north lane at (230,-6), 6 m past the hero and 6 m north —
+    // further from the lens than the hero, smaller, its roof and light
+    // bar clear of the hero's box; the interceptor on the south lane
+    // at (228, 2.5), headlights on, the second converging unit; the
+    // roadblock waits at the gate (staged above). Every unit is a real
+    // police unit with a roster state, not a prop.
+    const chaser = new Car(g, 'sedan', 0xf2f2f2, 230, -6, -Math.PI / 2, true);
     chaser.unit = { name: 'INTERCEPTOR', state: 'pursue', kind: 'cruiser', blockTarget: null, ramCooldown: 0 };
     chaser.speed = 40;
     g.police.units.push(chaser);
-    const oncoming = new Car(g, 'sedan', 0xf2f2f2, 234, 1.5, Math.PI / 2, true);
+    const oncoming = new Car(g, 'sedan', 0xf2f2f2, 228, 2.5, Math.PI / 2, true);
     oncoming.unit = { name: 'VKPD-07', state: 'pursue', kind: 'cruiser', blockTarget: null, ramCooldown: 0 };
     oncoming.speed = 25;
-    oncoming.pos.y = 0.32;
     oncoming.syncMesh();
     g.police.units.push(oncoming);
     // De-conflict: the loop's traffic and the spawned units converged
     // on the old (leap) position, so anything that ended up within
-    // 7 m of the hero, the chaser or the interceptor — or within 5 m
-    // of the camera — is moved east onto the approach behind the
-    // camera, still in the world and still on the roster, no longer
-    // sitting on the hero or blocking the lens.
+    // 7 m of the hero, the chaser, the interceptor or a roadblock car
+    // — or within 5 m of the camera — is moved east onto the approach
+    // behind the camera, still in the world and still on the roster,
+    // no longer sitting on the hero or blocking the lens.
     {
       const keepOut = [
-        { x: 258, z: 0, r: 7 }, { x: 252, z: -3.2, r: 7 }, { x: 234, z: 1.5, r: 7 },
-        { x: 263, z: 6.2, r: 5 },
+        { x: runCar.pos.x, z: runCar.pos.z, r: 7 }, { x: 230, z: -6, r: 7 }, { x: 228, z: 2.5, r: 7 },
+        { x: 202, z: -2, r: 7 }, { x: 208, z: 3.4, r: 7 },
+        { x: runCar.pos.x + 12, z: runCar.pos.z + 10, r: 5 },
       ];
       const clearOf = (x, z) => keepOut.every((k) => Math.hypot(x - k.x, z - k.z) > k.r);
       for (const c of g.traffic.cars) {
@@ -197,7 +243,12 @@ export function stageShot(kind, game) {
       }
       for (const u of g.police.units) {
         if (u === chaser || u === oncoming) continue;
-        if (u.unit && u.unit.name === 'ROADBLOCK') continue;
+        // FIX ROUND 7 — only the two STAGED roadblock cars are exempt:
+        // the police AI spawns its own roadblock units during the loop
+        // and they can end up 2-6 m from the hero, overlapping it in
+        // the frame (the fix-6 exemption covered every ROADBLOCK, and
+        // the fix-6 roadblock sat 30 m from the hero, so it never bit).
+        if (stagedRoadblocks.includes(u)) continue;
         if (!clearOf(u.pos.x, u.pos.z)) {
           u.pos.set(306, 0, u.pos.z < 0 ? -3 : 3);
           u.syncMesh();
@@ -225,24 +276,24 @@ export function stageShot(kind, game) {
         m.renderOrder = 3;
         g.scene.add(m);
       };
-      streak(248, -1.5, 16, 1.6, 0xff9a3a, 0.30);
-      streak(236, 1.5, 20, 1.2, 0xff7a2a, 0.22);
-      streak(224, -2.5, 18, 1.4, 0xffb347, 0.18);
-      streak(264, 2.5, 12, 1.2, 0xff9a3a, 0.22);
-      streak(234, -1.5, 10, 1.0, 0xfff2d0, 0.16);
+      streak(232, -1.5, 16, 1.6, 0xff9a3a, 0.30);
+      streak(222, 1.5, 20, 1.2, 0xff7a2a, 0.22);
+      streak(212, -2.5, 18, 1.4, 0xffb347, 0.18);
+      streak(246, 2.5, 12, 1.2, 0xff9a3a, 0.22);
+      streak(228, -1.5, 10, 1.0, 0xfff2d0, 0.16);
       // Warm reflection pool under the hero + its exhaust glow.
-      streak(258, 0, 7, 3.4, 0xff8a2a, 0.28);
-      streak(258, 0, 4.5, 2.2, 0xffd9a0, 0.20);
+      streak(236, 0, 7, 3.4, 0xff8a2a, 0.28);
+      streak(236, 0, 4.5, 2.2, 0xffd9a0, 0.20);
       // Cool headlight reflection stretching west from the interceptor.
-      streak(228, 1.5, 12, 1.0, 0xcfe8ff, 0.20);
+      streak(222, 2.5, 12, 1.0, 0xcfe8ff, 0.20);
       // Cool headlight reflection west from the tucked chaser.
-      streak(246, -3.2, 9, 0.9, 0xcfe8ff, 0.16);
+      streak(224, -6, 9, 0.9, 0xcfe8ff, 0.16);
       // FIX ROUND 6 (finish 2): the wet band read as a black void in
       // the mid-road — the opaque band covers the road's own lane
       // dashes, and the glints alone do not carry it. White centre
       // dashes laid on the band, plus one long warm streak down the
       // middle, so the wet reads as a road with markings and sun on it.
-      for (const dx of [236, 246, 256, 266]) {
+      for (const dx of [222, 232, 242, 252]) {
         const dash = new THREE.Mesh(
           new THREE.PlaneGeometry(3, 0.35),
           new THREE.MeshBasicMaterial({ color: 0xf2f2e8, transparent: true, opacity: 0.85, depthWrite: false }),
@@ -281,7 +332,7 @@ export function stageShot(kind, game) {
       for (let i = 0; i < g.city.lamps.count; i++) {
         g.city.lamps.getMatrixAt(i, lm);
         lp.setFromMatrixPosition(lm);
-        if (lp.distanceTo(runCar.pos) < 12 || Math.hypot(lp.x - 263, lp.z - 6.2) < 8) {
+        if (lp.distanceTo(runCar.pos) < 12 || Math.hypot(lp.x - (runCar.pos.x + 12), lp.z - (runCar.pos.z + 10)) < 8) {
           lm.makeScale(0, 0, 0);
           g.city.lamps.setMatrixAt(i, lm);
           g.city.lampPoles.setMatrixAt(i, lm);
@@ -335,20 +386,32 @@ export function stageShot(kind, game) {
       if (ud.hotspot) ud.hotspot.scale.set(3.0, 3.0, 1);
       if (hp.pool) hp.pool.material.opacity = 0.12;
     }
-    // Camera (FIX ROUND 6 finish): the fix-6 camera sat 10.7 m from
-    // the hero, so the hero was a small slab and the astern chaser
-    // matched it. The camera now sits ~8 m off the hero's rear
-    // quarter, low (2.0 m) and south, looking west-northwest — the
-    // hero's rear and sunlit south flank fill the right foreground
-    // (fully in frame: the first finish pose clipped the hero's rear
-    // off the right edge), the tucked chaser sits smaller up-road to
-    // the left, the interceptor and the roadblock run away to the
-    // left, and the ship and cranes stand on the right against the
-    // sunset. fov 50: the hero holds its size while the chase still
-    // fits the frame.
-    g.cameraCtl.setShotPose([263, 2.0, 6.2], [252, 1.0, -1.0]);
+    // Camera (FIX ROUND 7): south-east and HIGH (3 m above the hero,
+    // 12 m east, 10 m south), looking north-west at the leap — the
+    // hero's south flank, roof and rear read at ~16% width, the chase
+    // runs away to the left, and the copper tidal gate stands behind
+    // the roadblock against the sunset. High enough that the sightline
+    // clears the east leaf's free end (4.5 m): the leaf reads as a
+    // ramp in the lower frame, not a wall. (The first round-7 camera
+    // sat low at y 3.0 east of the bridge, and the leaf filled the
+    // frame as a tan wall.) Relative to the hero, like fix 5, so the
+    // frame follows the sim's true leap position.
+    const hp = runCar.pos;
+    g.cameraCtl.setShotPose([hp.x + 12, hp.y + 3, hp.z + 10], [hp.x - 4, hp.y, hp.z - 2]);
     g.camera.fov = 50;
     g.camera.updateProjectionMatrix();
+    // Apply the pose NOW so the overlap check below projects against
+    // the real camera (the combat branch does the same).
+    g.cameraCtl.update(0, g.input);
+    // FIX ROUND 7 — screen-space overlap check (plan requirement):
+    // the hero must not overlap any police unit by more than 10% of
+    // its own box. Stored on window for the verifier.
+    {
+      const overlaps = g.police.units.map((u) => ({ name: u.unit?.name ?? u.cls, ov: screenOverlap(g, runCar, u) }));
+      const maxOv = Math.max(0, ...overlaps.map((o) => o.ov));
+      window.__shotOverlap = { max: maxOv, units: overlaps };
+      console.log('[cover-overlap] max=' + (maxOv * 100).toFixed(1) + '% ' + JSON.stringify(overlaps.map((o) => o.name + ':' + (o.ov * 100).toFixed(1) + '%')));
+    }
   } else if (kind === 'combat') {
     // YARD AMBUSH: JOB 5 in the container yard at midday (12:30, blue
     // sky, bright colour-blocked containers). The same run at JOB 5:
@@ -615,9 +678,16 @@ export function stageShot(kind, game) {
 
   // Freeze the world, render one settled frame, dump the live state for
   // the probes, signal readiness. (The mission banner and any dialogue
-  // are cleared: they would cover the frame.)
+  // are cleared: they would cover the frame — except the cover, which
+  // pins Marco's KINGPIN dialogue card, and the combat frame, which
+  // opens the weapon wheel.)
   g.hud.clearBanner();
   g.hud.clearDialogue();
+  // FIX ROUND 7 — cover: pin Marco's KINGPIN line (missionComms
+  // renders it from current(); clearDialogue only clears the legacy
+  // line). Combat: force the weapon wheel open on the SMG.
+  if (kind === 'cover') g.missionComms.showForShot('cover');
+  if (kind === 'combat') g.weaponWheel.openForShot();
   g.hud.update(0);
   const focus =
     kind === 'cover' ? { x: 250, z: 0, r: 60 }

@@ -21,6 +21,7 @@ import * as THREE from 'three';
 import { PALETTE, clamp } from '../util.js';
 import { isLand } from '../world/roadNetwork.js';
 import { tintedGlassMaterial, lighterShade, makeCarLights, addRoofPanel } from '../world/vehicleMaterials.js';
+import { buildSmoothBody } from '../world/vehicleBodyBuilder.js';
 import { checkStuntLanding } from '../systems/activities/stuntJumps.js';
 
 export const VEHICLE_CLASSES = {
@@ -142,7 +143,9 @@ export class Car {
     this.def = VEHICLE_CLASSES[cls];
     this.color = color;
     this.police = police;
-    this.mesh = makeCarMesh(cls, color, police);
+    // FIX ROUND 7 — smooth bodies from vehicleBodyBuilder (drop-in for
+    // makeCarMesh: same signature, same userData, same dims).
+    this.mesh = buildSmoothBody(cls, color, police);
     this.pos = new THREE.Vector3(x, 0, z);
     this.heading = heading;
     this.speed = 0;
@@ -167,7 +170,13 @@ export class Car {
 
   // Effective stats with the garage tune applied.
   topSpeed() {
-    return this.def.topSpeed * (1 + 0.08 * (this.tune.engine || 0));
+    let top = this.def.topSpeed * (1 + 0.08 * (this.tune.engine || 0));
+    // FIX ROUND 7 — Mira's Driver's Cut: +25% top speed for 8 s, on
+    // the player's car only (traffic/police cars never get the boost).
+    if (this.game.player.inCar === this && this.game.crewAbilities?.speedBoostActive()) {
+      top *= this.game.crewAbilities.boostMultiplier;
+    }
+    return top;
   }
 
   maxHp() {

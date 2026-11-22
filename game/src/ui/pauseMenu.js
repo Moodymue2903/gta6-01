@@ -8,6 +8,7 @@
 
 import { CAREER_MAP, CTX_TWO_D, EIGHT, FIVE, FONTS, FOUR, HEAT_RADIUS, HUNDRED, MAP_BOUNDS, ONE, SEVEN, SIX, THREE, TWO, ZERO, ringSvg } from './hudStyles.js';
 import { MAP_MARKERS, districtRects } from '../world/cityLayout.js';
+import { careerGroups } from './careerActivities.js';
 
 function drawCareerMap(canvas, game, vm) {
   const ctx = canvas.getContext(CTX_TWO_D);
@@ -80,7 +81,11 @@ function drawCareerMap(canvas, game, vm) {
 
 export function renderCareer(game, el, vm) {
   const c = vm.career;
-  const activities = c.activities.map((a) => `<div class="act-row"><span>${a.name}</span><div class="act-bar"><i style="width:${a.frac * HUNDRED}%"></i></div><b>${a.label}</b></div>`).join('');
+  // FIX ROUND 7 — the nine tracks render as four bold groups (Story /
+  // Street / Exploration / Empire) with the live act title, from
+  // careerActivities.js; the rows are the same live registry rows.
+  const { groups, actTitle } = careerGroups(game, vm);
+  const activities = groups.map((g) => `<div class="cp-head cp-head-gap">${g.title}</div>` + g.rows.map((a) => `<div class="act-row"><span>${a.name}</span><div class="act-bar"><i style="width:${a.frac * HUNDRED}%"></i></div><b>${a.label}</b></div>`).join('')).join('');
   const slots = c.slots.map((s) => `<div class="slot${s.empty ? ' empty' : ''}"><b>${s.title}</b><span>${s.line}</span></div>`).join('');
   const crew = vm.crew.map((m) => `<div class="cs-row"><span>${m.key} · ${m.name} — ${m.role}</span><b>${m.label}</b></div>`).join('');
   const lg = c.ledger;
@@ -92,7 +97,7 @@ export function renderCareer(game, el, vm) {
   const medals = c.activities.find((a) => a.id === 'medals');
   const respect = c.activities.find((a) => a.id === 'respect');
   el.innerHTML = `
-    <div class="career-head"><div class="career-title">VERMILION CAREER</div><span>${c.rank} · ${c.respectLine} · ${c.cash} · ${vm.clock}</span></div>
+    <div class="career-head"><div class="career-title">VERMILION CAREER</div><span>${actTitle} · ${c.rank} · ${c.respectLine} · ${c.cash} · ${vm.clock}</span></div>
     <div class="career-giants">
       <div class="giant ring-cell">${ringSvg(c.ringDash)}<div class="giant-num">${c.pctNum}</div><div class="giant-sub">COMPLETE</div></div>
       <div class="giant"><div class="giant-kicker">RANK</div><div class="giant-num">${c.rank}</div><div class="giant-sub">${c.respectLine}</div></div>

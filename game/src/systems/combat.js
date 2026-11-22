@@ -85,15 +85,20 @@ export class Combat {
         this.ammo[this.weapon] -= take;
       }
     }
-    // Weapons switch on keys 1-4 directly (FIX ROUND 5: no wheel).
-    for (let i = 0; i < 4; i++) {
-      if (input.pressed('Digit' + (i + 1))) this.select(i);
+    // Weapons switch on keys 1-4 directly — unless the wheel is open,
+    // when the keys only highlight a slot in the wheel (FIX ROUND 7).
+    if (!this.game.weaponWheel?.open) {
+      for (let i = 0; i < 4; i++) {
+        if (input.pressed('Digit' + (i + 1))) this.select(i);
+      }
     }
     if (input.pressed('KeyR')) this.startReload();
     // Lock-on: nearest shootable thing near the crosshair.
     this.aimTarget = this.pickAimTarget();
     // Fire on mouse click (or F while driving? no — mouse only).
-    const firing = input.mouseDown && (WEAPONS[this.weapon].auto || input.pressedMouse);
+    // FIX ROUND 7 — no firing while the weapon wheel is open: a click
+    // while choosing a weapon must not shoot.
+    const firing = input.mouseDown && !this.game.weaponWheel?.open && (WEAPONS[this.weapon].auto || input.pressedMouse);
     if (firing && this.cooldown <= 0 && this.reloadT <= 0) this.fire();
     // Fade tracers (FIX ROUND 6: 0.30 s, not 0.12 — a tracer that is
     // still near full opacity at the freeze reads at sheet size, and

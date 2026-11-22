@@ -6,16 +6,23 @@
 // five syndicate guards at the night market, a live HOSTILES DOWN
 // counter, then secure the package. The old survive-and-wait job
 // (THE DROP) proved nothing on a screenshot.
+// FIX ROUND 5 — JOB 5 is now YARD AMBUSH: six syndicate guards in the
+// container yard at midday, the fight frame's daylight shootout. A job
+// also earns its medal and its district now: gold if the job finishes
+// inside its par time at full health, and the district where the job
+// completes gains standing (one job takes a district). Both feed the
+// nine-track activity registry, never typed numbers.
 
 import * as THREE from 'three';
 import { Car } from '../entities/vehicle.js';
 import { clamp } from '../util.js';
+import { districtAt } from '../world/cityLayout.js';
 
 export const MISSIONS = [
   {
     id: 1, name: 'BAGMAN', giver: 'Mira', giverRole: 'DRIVER',
     briefing: 'First job, runner. Pick up the package at the marina and bring it to the safehouse. No cops, no noise.',
-    reward: 800, respect: 60,
+    reward: 800, respect: 60, par: 240,
     stages: [
       { type: 'goto', text: 'Pick up the package at the marina', x: 60, z: -128, radius: 6 },
       { type: 'deliver', text: 'Deliver the package to the safehouse', x: 60, z: 138, radius: 7, time: 150 },
@@ -24,7 +31,7 @@ export const MISSIONS = [
   {
     id: 2, name: 'HOT WHEELS', giver: 'Lo', giverRole: 'MECHANIC',
     briefing: 'A courier is running product through downtown in a muscle car. Chase him down, ram him till he stops, take the case.',
-    reward: 1200, respect: 80,
+    reward: 1200, respect: 80, par: 300,
     stages: [
       { type: 'chase', text: 'Chase the courier — ram him until he stops', target: 'courier', radius: 6, time: 180 },
       { type: 'collect', text: 'Grab the case from the wreck', radius: 5 },
@@ -33,7 +40,7 @@ export const MISSIONS = [
   {
     id: 3, name: 'LOSE THE HEAT', giver: 'Kiki', giverRole: 'LOOKOUT',
     briefing: 'The Keys PD is all over you. Break line of sight, let the heat die, then slip to the hospital hideout.',
-    reward: 1000, respect: 80,
+    reward: 1000, respect: 80, par: 300,
     stages: [
       { type: 'escape', text: 'Break line of sight — lose the cops', time: 150 },
       { type: 'goto', text: 'Reach the hospital hideout', x: -280, z: 128, radius: 8 },
@@ -42,25 +49,25 @@ export const MISSIONS = [
   {
     id: 4, name: 'DOCKSIDE', giver: 'Mira', giverRole: 'DRIVER',
     briefing: 'A container truck at the port is carrying syndicate cash. Steal it, bring it to the garage. The PD will notice.',
-    reward: 2000, respect: 110,
+    reward: 2000, respect: 110, par: 360,
     stages: [
       { type: 'goto', text: 'Reach the container truck at the port', x: 380, z: -150, radius: 8 },
       { type: 'deliver', text: 'Drive the truck to the garage — stay alive', x: 52, z: 128, radius: 8, time: 210, wanted: 2 },
     ],
   },
   {
-    id: 5, name: 'MARKET CRACKDOWN', giver: 'Kiki', giverRole: 'LOOKOUT',
-    briefing: 'The syndicate runs the night market after dark. Clear their guards and secure the package — the PD will hear the shots.',
-    reward: 1800, respect: 110,
+    id: 5, name: 'YARD AMBUSH', giver: 'Kiki', giverRole: 'LOOKOUT',
+    briefing: 'The syndicate runs the container yard at the port. Clear their guards and secure the package — the PD will hear the shots.',
+    reward: 1800, respect: 110, par: 300,
     stages: [
-      { type: 'fight', text: 'Eliminate the syndicate guards', count: 5, time: 180 },
-      { type: 'goto', text: 'Secure the market package', x: 100, z: 122, radius: 5 },
+      { type: 'fight', text: 'Eliminate the syndicate guards', count: 6, time: 180 },
+      { type: 'goto', text: 'Secure the yard package', x: 390, z: -166, radius: 5 },
     ],
   },
   {
     id: 6, name: 'RIVAL DOWN', giver: 'Lo', giverRole: 'MECHANIC',
     briefing: 'A rival hitter is waiting in the old town. Reach him and put him down — drive-by or on foot, your call.',
-    reward: 2500, respect: 140,
+    reward: 2500, respect: 140, par: 300,
     stages: [
       { type: 'goto', text: 'Reach the old town meet', x: 380, z: 80, radius: 8 },
       { type: 'destroy', text: 'Take out the rival', target: 'rival', radius: 30, time: 180 },
@@ -69,7 +76,7 @@ export const MISSIONS = [
   {
     id: 7, name: 'GRAND PRIX', giver: 'Mira', giverRole: 'DRIVER',
     briefing: 'Street race, eight gates, three rivals, one pot. Beat the clock and beat them. No shortcuts — the gates are the route.',
-    reward: 3000, respect: 160,
+    reward: 3000, respect: 160, par: 300,
     stages: [
       { type: 'race', text: 'Race the gates — 8 to go', time: 165 },
     ],
@@ -77,7 +84,7 @@ export const MISSIONS = [
   {
     id: 8, name: 'KINGPIN', giver: 'Marco', giverRole: 'SYNDICATE',
     briefing: 'Last job. Hit the syndicate cars at the port, then run — the drawbridge is up, so you leap it. Do not stop. Do not look back.',
-    reward: 5000, respect: 220,
+    reward: 5000, respect: 220, par: 420,
     stages: [
       { type: 'destroy', text: 'Destroy the syndicate cars at the port', target: 'syndicate', count: 3, radius: 60, time: 240 },
       { type: 'escape', text: 'Lose the cops — then leap the drawbridge', time: 150 },
@@ -91,20 +98,22 @@ const RACE_GATES = [
   { x: 200, z: 110 }, { x: 140, z: 110 }, { x: 60, z: 110 }, { x: -20, z: 110 },
 ];
 
-// Night-market guard posts (fixed, deterministic): three in the open
-// aisle, one crouched behind a stall, one at the far end.
-const MARKET_GUARDS = [
-  { x: 104, z: 119, cover: false },
-  { x: 110, z: 118, cover: false },
-  { x: 116, z: 120, cover: false },
-  { x: 100, z: 122, cover: true },
-  { x: 120, z: 121, cover: false },
+// Container-yard guard posts (fixed, deterministic): four in the open
+// aisle between the road and the north container row, one crouched
+// behind the row gap, one at the far east end.
+const YARD_GUARDS = [
+  { x: 388, z: -164, cover: false },
+  { x: 394, z: -166, cover: false },
+  { x: 400, z: -164, cover: false },
+  { x: 406, z: -166, cover: false },
+  { x: 390, z: -170, cover: true },
+  { x: 410, z: -164, cover: false },
 ];
 
 export class MissionSystem {
   constructor(game) {
     this.game = game;
-    this.active = null; // {def, stage, timer, data}
+    this.active = null; // {def, stage, timer, totalTimer, data}
     this.completed = new Set();
     // 3D objective beacon: a pulsing additive cylinder.
     const geo = new THREE.CylinderGeometry(2.2, 2.2, 26, 12, 1, true);
@@ -164,7 +173,7 @@ export class MissionSystem {
   start(id) {
     const def = MISSIONS.find((m) => m.id === id);
     if (!def || this.active) return false;
-    this.active = { def, stage: 0, timer: 0, gate: 0, kills: 0, chaseCar: null, targets: [], guards: [], data: {} };
+    this.active = { def, stage: 0, timer: 0, totalTimer: 0, gate: 0, kills: 0, chaseCar: null, targets: [], guards: [], data: {} };
     this.setupStage();
     this.game.hud?.showDialogue(def.giver, def.giverRole, def.briefing);
     this.game.hud?.banner('JOB ' + def.id + ' — ' + def.name, def.briefing);
@@ -195,12 +204,12 @@ export class MissionSystem {
       this.active.kills = 0;
     }
     if (s.type === 'fight') {
-      // Five syndicate guards at the night market. They hold their post
+      // Six syndicate guards in the container yard. They hold their post
       // and stay down when shot — the mission counts them.
-      this.active.guards = MARKET_GUARDS.map((p) => this.game.peds.spawnGuard(p.x, p.z, 0, p.cover));
+      this.active.guards = YARD_GUARDS.map((p) => this.game.peds.spawnGuard(p.x, p.z, 0, p.cover));
       this.active.kills = 0;
-      // The market is loud: the PD is already on its way.
-      this.game.police.addHeat(20, 'market crackdown');
+      // The yard is loud: the PD is already on its way.
+      this.game.police.addHeat(20, 'yard ambush');
     }
     if (s.type === 'survive') {
       // Kiki waits at the drop point; police waves come to her.
@@ -237,13 +246,22 @@ export class MissionSystem {
   complete() {
     const a = this.active;
     const def = a.def;
+    // Gold medal: the whole job inside its par time, at full health.
+    // District standing: the job completes in the district the player
+    // is standing in — one job takes a district.
+    const p = this.game.player;
+    const px = p.inCar ? p.inCar.pos.x : p.pos.x;
+    const pz = p.inCar ? p.inCar.pos.z : p.pos.z;
+    const gold = (a.totalTimer || 0) <= (def.par || 9999) && p.health >= 100;
+    this.game.activities?.recordMedal(gold);
+    this.game.districts?.recordJobComplete(districtAt(px, pz).id);
     this.game.progression.addCash(def.reward);
     this.game.progression.addRespect(def.respect);
     this.game.progression.missionsDone.add(def.id);
     if (def.id === 7) this.game.progression.recordRaceWin();
     this.game.progression.save();
     this.teardown();
-    this.game.hud?.banner('JOB COMPLETE — ' + def.name, `+$${def.reward}  •  +${def.respect} respect`);
+    this.game.hud?.banner('JOB COMPLETE — ' + def.name, `+V$${def.reward}  •  +${def.respect} respect`);
     this.game.hud?.showDialogue(def.giver, def.giverRole, 'Clean. The money is yours. Next job when you are ready.');
     this.game.audio?.blip('pass');
   }
@@ -268,6 +286,7 @@ export class MissionSystem {
     const player = this.game.player;
     const pPos = player.inCar ? player.inCar.pos : player.pos;
     a.timer += dt;
+    a.totalTimer = (a.totalTimer || 0) + dt;
 
     // Stage timer.
     if (s.time && a.timer > s.time) {
@@ -338,7 +357,7 @@ export class MissionSystem {
         break;
       }
       case 'fight': {
-        // Guards down count live; the stage clears when all five are down.
+        // Guards down count live; the stage clears when all six are down.
         const down = this.active.guards.filter((p) => p.state === 'down').length;
         this.active.kills = down;
         if (s.count && down >= s.count) this.advance();

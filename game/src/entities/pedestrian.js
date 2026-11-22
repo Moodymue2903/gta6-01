@@ -4,18 +4,20 @@
 // FIX ROUND 3 — a real crowd, not a backdrop:
 //   * states: walk / alert / flee / hide / witness / guard / down.
 //     idle -> alerted -> fleeing -> hiding -> returning.
-//   * gunfire within 28 m makes civilians panic and bolt (reactToGunfire).
+//   * gunfire within 30 m makes civilians panic and bolt (reactToGunfire).
 //   * a witness (phone up, 2 s) reports a crime they saw; interrupt them
 //     before the timer runs out and the police are never told.
 //   * syndicate guards: dark-clothed, red bandana, gun in hand. They hold
 //     their post, take cover, and stay down when shot (no respawn) — they
-//     are the night-market fight (mission 5).
+//     are the container-yard fight (mission 5).
 // FIX ROUND 4 — downed guards must read as BODIES, not dark-on-dark
 // debris: downBody() lays a guard out with a pale shirt, a blood pool
 // and a dropped gun. Witnesses keep filming after they report (phone
 // stays up while they flee), so the witness is still identifiable at
 // the screenshot freeze — in fix 3 the phone vanished the moment the
 // report landed. The phone itself is bigger now, with a glowing screen.
+// FIX ROUND 5 — the panic radius is 30 m (was 28): gunfire anywhere in
+// the yard fight makes the whole aisle bolt.
 
 import * as THREE from 'three';
 import { choice, rand } from '../util.js';
@@ -212,7 +214,7 @@ export class Pedestrians {
     for (const p of this.peds) {
       if (p.state === 'down' || p.static) continue;
       const d = Math.hypot(p.pos.x - x, p.pos.z - z);
-      if (d > 28) continue;
+      if (d > 30) continue;
       if (p.guard) {
         p.heading = Math.atan2(px - p.pos.x, pz - p.pos.z);
         p.mesh.rotation.y = p.heading;

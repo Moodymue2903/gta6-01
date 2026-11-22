@@ -1,4 +1,4 @@
-// VERMILION KEYS — combat: four weapons, wheel, hitscan fire.
+// VERMILION KEYS — combat: four weapons, hitscan fire.
 // Fire is a ray from the camera through the crosshair against simple
 // sphere targets (cars, peds, police units). Tracers and muzzle flash
 // are cheap meshes that fade in just over a tenth of a second.
@@ -15,6 +15,9 @@
 // is 6-9 m behind the player in third person), so the disc still
 // filled the frame as a giant white blob and the tracer as a white
 // wedge. At the gun the same disc reads as a flash, ~30 px.
+// FIX ROUND 5 — the weapon wheel is gone (the HUD shows one weapon
+// chip only; weapons switch on keys 1-4 directly), and every shot
+// kill is counted on the combat system so the state dump can read it.
 
 import * as THREE from 'three';
 import { clamp } from '../util.js';
@@ -34,15 +37,10 @@ export class Combat {
     this.inMag = WEAPONS.map((w) => w.mag);
     this.cooldown = 0;
     this.reloadT = 0;
-    this.wheelOpen = false;
     this.tracers = [];
     this.sparks = [];
     this.aimTarget = null;
-    // Weapon wheel DOM (radial, shown while Q is held).
-    this.wheelEl = document.createElement('div');
-    this.wheelEl.id = 'weapon-wheel';
-    this.wheelEl.innerHTML = WEAPONS.map((w, i) => `<div class="ww-slot" data-i="${i}"><b>${i + 1}</b><span>${w.name}</span></div>`).join('');
-    document.getElementById('hud').appendChild(this.wheelEl);
+    this.kills = 0; // peds knocked down by shots (the fight's body count)
     // Muzzle flash disc at the shooter's gun. FIX ROUND 4: a small ROUND
     // disc (r=0.22) — a square plane reads as a billboard at this
     // distance, a disc reads as a flash. FIX ROUND 4b: the muzzle moved
@@ -86,16 +84,9 @@ export class Combat {
         this.ammo[this.weapon] -= take;
       }
     }
-    // Wheel: hold Q, pick with 1-4 or click.
-    const wantWheel = !!input.keys['KeyQ'];
-    if (wantWheel !== this.wheelOpen) {
-      this.wheelOpen = wantWheel;
-      this.wheelEl.classList.toggle('open', wantWheel);
-    }
-    if (this.wheelOpen) {
-      for (let i = 0; i < 4; i++) {
-        if (input.pressed('Digit' + (i + 1))) this.select(i);
-      }
+    // Weapons switch on keys 1-4 directly (FIX ROUND 5: no wheel).
+    for (let i = 0; i < 4; i++) {
+      if (input.pressed('Digit' + (i + 1))) this.select(i);
     }
     if (input.pressed('KeyR')) this.startReload();
     // Lock-on: nearest shootable thing near the crosshair.
@@ -236,11 +227,17 @@ export class Combat {
         else this.game.police.addHeat(8, 'shot fired');
       } else {
         this.game.peds.knockDown(target.ped, 'shot');
+        this.kills++;
       }
       this.spawnSparks(end);
     } else {
       end = origin.clone().addScaledVector(dir, range);
-      this.game.police.addHeat(4, 'shot fired');
+      // A missed shot is heard but not attributed: with no witness the
+      // police do not know it was the player, so no units are dispatched
+      // (reported: false). The witness is what makes a shooting known —
+      // that is the two-path design T3 tests. A hit is a visible crime
+      // with a victim, so the car/ped heats below stay reported.
+      this.game.police.addHeat(4, 'shot fired', { reported: false });
     }
     // Tracer: a thin additive cylinder from the muzzle to the hit point,
     // so it reads as a line at screenshot size (a 1 px THREE.Line does

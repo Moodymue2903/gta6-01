@@ -39,6 +39,11 @@ void main() {
 // uniforms, fog, sun, hemisphere, rim, fill and cloud tint together,
 // and update() positions the sun from the CURRENT sunDir so the preset
 // survives the staging ticks.
+// FIX ROUND 5 — a midday preset for the container-yard shootout: high
+// sun, bright blue sky, pale horizon, so the fight frame is unmistakably
+// daylight (at least two of the four frames must read as daylight).
+// Every preset also carries its clock start (minutes from midnight): the
+// HUD clock is the preset's time plus one game-minute per sim second.
 const PRESETS = {
   // Bright golden hour (cover). The fix-1 values, unchanged.
   golden: {
@@ -46,7 +51,7 @@ const PRESETS = {
     skyTop: 0x9a6ab8, skyMid: 0xe8894a, skyHorizon: 0xff8a2a, sunGlow: 0xffe0b0,
     fog: 0xff9a45, hemiSky: 0xffb98a, hemiGround: 0x8a6a72, hemiIntensity: 1.35,
     rimColor: 0x7a9fff, rimIntensity: 0.9, fillColor: 0xffd9a0, fillIntensity: 0.85,
-    cloud: 0xffe0b8, exposure: 1.3,
+    cloud: 0xffe0b8, exposure: 1.3, clockStart: 1060,
   },
   // Bright daylight (foot): high blue sky, pale horizon, teal water.
   day: {
@@ -54,7 +59,17 @@ const PRESETS = {
     skyTop: 0x2a6ad9, skyMid: 0x6ab8e8, skyHorizon: 0xcfe8f2, sunGlow: 0xfff8e0,
     fog: 0xa8d0e8, hemiSky: 0xbfd9ff, hemiGround: 0x8a7a5a, hemiIntensity: 1.15,
     rimColor: 0x9fc0ff, rimIntensity: 0.7, fillColor: 0xd8ecff, fillIntensity: 0.9,
-    cloud: 0xffffff, exposure: 1.25,
+    cloud: 0xffffff, exposure: 1.25, clockStart: 735,
+  },
+  // Midday (container-yard shootout): the sun near overhead, a deep blue
+  // sky and a hard bright light so the colour-blocked containers and the
+  // fight read at full saturation, not in golden-hour amber.
+  midday: {
+    sunDir: [0.3, 0.85, -0.3], sunColor: 0xfff2d0, sunIntensity: 3.4,
+    skyTop: 0x1a5ad9, skyMid: 0x5ab8e8, skyHorizon: 0xd8f0f8, sunGlow: 0xfff8e0,
+    fog: 0xa8d0e8, hemiSky: 0xbfd9ff, hemiGround: 0x8a7a5a, hemiIntensity: 1.25,
+    rimColor: 0x9fc0ff, rimIntensity: 0.8, fillColor: 0xd8ecff, fillIntensity: 1.0,
+    cloud: 0xffffff, exposure: 1.25, clockStart: 750,
   },
   // Dusk purple-pink (police): very low pink sun, violet shadows.
   dusk: {
@@ -62,7 +77,7 @@ const PRESETS = {
     skyTop: 0x4a2a6a, skyMid: 0xd95a8a, skyHorizon: 0xff7a5a, sunGlow: 0xffb0c0,
     fog: 0xc97a8a, hemiSky: 0xc98ab8, hemiGround: 0x5a3a5a, hemiIntensity: 1.1,
     rimColor: 0xb08aff, rimIntensity: 0.8, fillColor: 0xffb0d0, fillIntensity: 0.7,
-    cloud: 0xffb0a0, exposure: 1.3,
+    cloud: 0xffb0a0, exposure: 1.3, clockStart: 1180,
   },
   // Neon night (mission): dark violet sky, cool moonlight key, lit
   // windows and lamps carry the frame. Exposure stays up so the frame
@@ -82,7 +97,7 @@ const PRESETS = {
     skyTop: 0x0a0a2a, skyMid: 0x3a2a6a, skyHorizon: 0x8a4a8a, sunGlow: 0xc0d0ff,
     fog: 0x2a1a4a, hemiSky: 0x2a3a6a, hemiGround: 0x1a1a2a, hemiIntensity: 1.35,
     rimColor: 0x6a8aff, rimIntensity: 0.9, fillColor: 0x8a7aff, fillIntensity: 1.2,
-    cloud: 0x3a2a55, exposure: 1.3,
+    cloud: 0x3a2a55, exposure: 1.3, clockStart: 1215,
   },
 };
 
@@ -93,6 +108,7 @@ export function buildLighting(scene) {
   // reads in the north-looking cover shot. Sky top lifted so the upper
   // sky is violet, not near-black.
   let sunDir = new THREE.Vector3(...PRESETS.golden.sunDir).normalize();
+  let clockStart = PRESETS.golden.clockStart;
   const skyMat = new THREE.ShaderMaterial({
     vertexShader: SKY_VERT,
     fragmentShader: SKY_FRAG,
@@ -178,6 +194,7 @@ export function buildLighting(scene) {
     setTimeOfDay(name) {
       const p = PRESETS[name] || PRESETS.golden;
       sunDir = new THREE.Vector3(...p.sunDir).normalize();
+      clockStart = p.clockStart;
       skyMat.uniforms.topColor.value.setHex(p.skyTop);
       skyMat.uniforms.midColor.value.setHex(p.skyMid);
       skyMat.uniforms.horizonColor.value.setHex(p.skyHorizon);
@@ -195,6 +212,14 @@ export function buildLighting(scene) {
       fill.intensity = p.fillIntensity;
       cloudMat.color.setHex(p.cloud);
       return p.exposure;
+    },
+    // In-game clock for the HUD: the preset's start time plus one
+    // game-minute per sim second, as HH:MM.
+    clockLabel(t) {
+      const mins = (clockStart + Math.floor(t)) % 1440;
+      const hh = String(Math.floor(mins / 60)).padStart(2, '0');
+      const mm = String(mins % 60).padStart(2, '0');
+      return hh + ':' + mm;
     },
     update(dt, t, focus) {
       // Keep the shadow frustum centred on the action. The sun offset

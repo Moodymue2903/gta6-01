@@ -9,10 +9,19 @@
 // FIX ROUND 4 — the cabin glass carries a faint emissive glow now, so
 // a car at dusk or neon night reads as a lit cabin, not a black block
 // on wheels (the re-test faulted "vehicles mostly black blocks").
+// FIX ROUND 5 — materials pass: no black roofs or glass anywhere. The
+// cabin is a lighter two-tone shade of the body colour (not dark
+// 0x1c2733), sports/muscle/sedan get a pale roof panel on top, the glass
+// band is the shared tinted-glass material, and the head/taillights are
+// the shared makeCarLights set — traffic lights the tails while braking.
+// Stunt landings are timed now: the car's airtime is measured and a
+// landing over a second in the air counts as a stunt (Stunt Ramps).
 
 import * as THREE from 'three';
 import { PALETTE, clamp } from '../util.js';
 import { isLand } from '../world/roadNetwork.js';
+import { tintedGlassMaterial, lighterShade, makeCarLights, addRoofPanel } from '../world/vehicleMaterials.js';
+import { checkStuntLanding } from '../systems/activities/stuntJumps.js';
 
 export const VEHICLE_CLASSES = {
   compact: { name: 'Pinto', topSpeed: 28, accel: 13, grip: 1.0, len: 3.4, wid: 1.7, h: 1.35, hp: 70 },
@@ -48,8 +57,16 @@ export function makeCarMesh(cls, color, police = false) {
   g.add(body);
   const cabinH = cls === 'van' ? H * 0.55 : H * 0.5;
   const cabinL = cls === 'bike' ? 0.5 : L * (cls === 'van' ? 0.62 : 0.48);
-  const cabin = box(cabinL, cabinH, W * 0.86, police ? PALETTE.policeBlack : 0x1c2733, cls === 'van' ? -L * 0.08 : -L * 0.04, H * 0.6 + cabinH / 2, 0);
+  // FIX ROUND 5 — two-tone roof: the cabin is a lighter shade of the
+  // body colour, never dark glass. Police cars keep the black cabin.
+  const cabinColor = police ? PALETTE.policeBlack : lighterShade(color, 0.22);
+  const cabin = box(cabinL, cabinH, W * 0.86, cabinColor, cls === 'van' ? -L * 0.08 : -L * 0.04, H * 0.6 + cabinH / 2, 0);
   g.add(cabin);
+  // FIX ROUND 5 — a pale roof panel on the cabin top for the painted
+  // classes, so the car reads as painted metal from above.
+  if (!police && (cls === 'sports' || cls === 'muscle' || cls === 'sedan')) {
+    addRoofPanel(g, L, W, H, color);
+  }
   if (cls === 'muscle' || cls === 'sports') {
     g.add(box(L * 0.16, 0.1, W * 0.9, 0x1a1a20, -L * 0.46, H * 0.62, 0)); // spoiler
   }
@@ -66,9 +83,10 @@ export function makeCarMesh(cls, color, police = false) {
   // behind because the flank had no detail at all.
   // FIX ROUND 4: the glass band glows faintly (emissive), so the cabin
   // reads at dusk and neon night instead of going black with the cabin.
+  // FIX ROUND 5: the band is the shared tinted-glass material.
   const glass = new THREE.Mesh(
     new THREE.BoxGeometry(cabinL * 0.82, cabinH * 0.52, W * 0.9),
-    new THREE.MeshLambertMaterial({ color: 0x7ab8d9, emissive: 0x2a4a5a, emissiveIntensity: 0.55 }),
+    tintedGlassMaterial(),
   );
   glass.position.set(cls === 'van' ? -L * 0.08 : -L * 0.04, H * 0.6 + cabinH / 2, 0);
   glass.castShadow = true;
@@ -81,17 +99,9 @@ export function makeCarMesh(cls, color, police = false) {
   if (cls === 'bike') {
     g.add(box(0.5, 0.5, 0.5, 0x222226, 0.1, H * 0.75, 0)); // rider torso
   }
-  // Headlights / taillights.
-  const hl = new THREE.MeshBasicMaterial({ color: 0xfff2b0 });
-  const tl = new THREE.MeshBasicMaterial({ color: 0xff2a2a });
-  for (const s of [-1, 1]) {
-    const h1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.22, 0.4), hl);
-    h1.position.set(L / 2, H * 0.35, s * W * 0.32);
-    g.add(h1);
-    const t1 = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.2, 0.42), tl);
-    t1.position.set(-L / 2, H * 0.35, s * W * 0.32);
-    g.add(t1);
-  }
+  // Headlights / taillights: the shared set, with brake-light tails
+  // traffic can light while braking (FIX ROUND 5).
+  makeCarLights(g, L, W, H);
   // Wheels.
   const wheels = [];
   const wheelGeo = new THREE.CylinderGeometry(0.36, 0.36, 0.28, 10);
@@ -150,6 +160,7 @@ export class Car {
     // Garage tune: engine/armour/handling levels (0-3). Modest, capped.
     this.tune = { engine: 0, armour: 0, handling: 0 };
     this._airStart = null; // takeoff point, for the longest-jump ledger
+    this._airT0 = null; // takeoff time, for the stunt airtime check
     this.syncMesh();
     game.scene.add(this.mesh);
   }
@@ -246,10 +257,17 @@ export class Car {
         this.airborne = false;
         this.vy = 0;
         // Longest jump: horizontal distance from takeoff to landing.
+        // FIX ROUND 5 — stunt timing: the airtime is measured from
+        // takeoff; a landing over a second in the air with real
+        // distance counts as a stunt (the player's car only).
         if (this._airStart) {
           const jump = Math.hypot(this.pos.x - this._airStart.x, this.pos.z - this._airStart.z);
           if (jump > 4) this.game.progression?.recordJump(jump);
+          if (this.game.player.inCar === this && this._airT0 !== null) {
+            checkStuntLanding(this.game, this.game.time - this._airT0, jump);
+          }
           this._airStart = null;
+          this._airT0 = null;
         }
         if (this.speed > 20) this.game.hud?.flash('land');
       }
@@ -258,6 +276,7 @@ export class Car {
       this.airborne = true;
       this.vy = Math.max(4, this.speed * 0.45);
       this._airStart = { x: this.pos.x, z: this.pos.z };
+      this._airT0 = this.game.time;
     } else if (ground > 0) {
       // On the ramp: climb it; launch near the tip at speed — the leap.
       this.pos.y = ground;
@@ -265,6 +284,7 @@ export class Car {
         this.airborne = true;
         this.vy = this.speed * 0.42;
         this._airStart = { x: this.pos.x, z: this.pos.z };
+        this._airT0 = this.game.time;
       }
     } else if (this.pos.y > 0.01) {
       if (this.pos.y > 0.5 && this.speed > 10) {
@@ -273,6 +293,7 @@ export class Car {
         this.airborne = true;
         this.vy = Math.max(2, this.speed * 0.25);
         this._airStart = { x: this.pos.x, z: this.pos.z };
+        this._airT0 = this.game.time;
       } else {
         this.pos.y = Math.max(0, this.pos.y - 8 * dt);
       }

@@ -13,10 +13,20 @@
 // roads (no more flat tan ground), and the garage neon sign's text
 // auto-fits its canvas (the 44 px line was wider than the canvas, so
 // both ends were cut in the texture itself).
+// FIX ROUND 5 — brightness + identity: low buildings wear the limestone
+// facade and mid buildings the terracotta facade (CanvasTexture, not
+// flat window grids), ambient props fill the market/boardwalk/docks,
+// the container yard is a real place on the port island (JOB 5's fight
+// ground), and the garage is a real interior with a lift, a turntable
+// and warm bay lights.
 
 import * as THREE from 'three';
 import { PALETTE, canvasTexture, choice, mulberry32, rand, randInt } from '../util.js';
 import { CAUSEWAYS, DRAWBRIDGE, GRAPH, ISLANDS, isLand, lanePoint, nearestRoadPoint } from './roadNetwork.js';
+import { limestoneFacade, terracottaFacade } from './buildingFactory.js';
+import { placeProps } from './propsPlacer.js';
+import { buildContainerYard } from './containerYard.js';
+import { buildGarageInterior } from './garageInterior.js';
 
 // Collect quads into one BufferGeometry (positions, normals, uvs, indices).
 class QuadSoup {
@@ -76,9 +86,10 @@ function speckleTexture(dots = 120) {
   }, 16, 16);
 }
 
-export function buildCity(scene, rng) {
+export function buildCity(scene, rng, game) {
   const colliders = [];
-  const animated = { ferris: null, ferrisCabins: [], beam: null, mastLight: null, bridgeLeafE: null, bridgeLeafW: null, waterTex: null };
+  const animated = { ferris: null, ferrisCabins: [], beam: null, mastLight: null, bridgeLeafE: null, bridgeLeafW: null, waterTex: null, garage: null };
+  let yardVehicles = [];
 
   // --- Water: one big teal plane with a scrolling wave texture. ---
   // FIX ROUND: the sea read as a flat dark slab in the police frame.
@@ -249,6 +260,7 @@ export function buildCity(scene, rng) {
         if (z > 104 && z < 146 && x > 58 && x < 152) continue; // night-market plaza (FIX ROUND 3)
         if (Math.hypot(x - 52, z - 128) < 24) continue; // garage clearing (FIX ROUND 3)
         if (z > 132 && x > -30 && x < 190) continue; // beach frontage: no buildings on the sand
+        if (x > 330 && x < 450 && z > -190 && z < -142) continue; // container yard (FIX ROUND 5)
         plots.push({
           x, z,
           w: rand(plotRng, 12, 22),
@@ -259,9 +271,12 @@ export function buildCity(scene, rng) {
       }
     }
   }
+  // FIX ROUND 5 — facades: low buildings wear limestone arches, mid
+  // buildings terracotta shutters (CanvasTexture, painted once and
+  // shared); only the towers keep the flat window grid.
   const classes = [
-    { max: 18, tex: windowTexture('#f2e8d8', '#ffd9a0') },
-    { max: 40, tex: windowTexture('#efe0d0', '#ffce8a') },
+    { max: 18, tex: limestoneFacade() },
+    { max: 40, tex: terracottaFacade() },
     { max: 999, tex: windowTexture('#e8d8e8', '#ffe0b0') },
   ];
   const buckets = [[], [], []];
@@ -643,6 +658,22 @@ export function buildCity(scene, rng) {
     scene.add(sign);
   }
 
+  // --- FIX ROUND 5: ambient props, the container yard, the garage interior. ---
+  // Props (fruit stands, crates, neon signs, bins) from a dedicated RNG;
+  // the container yard on the port island (JOB 5's fight ground, the
+  // EXPORT gate, six parked yard cars); the garage interior (walls,
+  // ceiling, lift, turntable, warm bay lights) over the canopy.
+  {
+    const props = placeProps(scene);
+    colliders.push(...props.colliders);
+    const yard = buildContainerYard(scene, game);
+    colliders.push(...yard.colliders);
+    yardVehicles = yard.yardVehicles;
+    const garage = buildGarageInterior(scene);
+    colliders.push(...garage.colliders);
+    animated.garage = garage;
+  }
+
   // --- Palms along the beach and boulevards (instanced trunks + crowns). ---
   const palmSpots = [];
   for (let x = -60; x < 225; x += 13) {
@@ -908,6 +939,7 @@ export function buildCity(scene, rng) {
     colliders,
     spots,
     bridge,
+    yardVehicles,
     // Exposed so screenshot staging can hide the lamps right at the leap
     // (SECOND FIX ROUND: a causeway lamp head filled the cover frame).
     // The live game keeps them; only the cover staging hides them.
@@ -918,6 +950,7 @@ export function buildCity(scene, rng) {
       bridge.update(dt);
       animated.bridgeLeafE.rotation.z = bridge.angle;
       animated.bridgeLeafW.rotation.z = -bridge.angle;
+      if (animated.garage) animated.garage.update(dt);
       if (animated.ferris) {
         animated.ferris.rotation.z -= dt * 0.12;
         const a = animated.ferris.rotation.z;

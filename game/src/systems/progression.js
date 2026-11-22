@@ -8,6 +8,10 @@
 //   * three real save slots (save/load/summary), each a full state.
 //   * garage upgrades are real purchases: check cash -> deduct -> apply
 //     to the car's tune -> save. Multipliers are modest and capped.
+// FIX ROUND 5 — the Motor Works price list carries its display names
+// (Twin-Turbo, Kevlar Plates, Drift Suspension, Chameleon Respray,
+// Full Repair), and the save carries the activity registry and the
+// district standing with it, so a reloaded career keeps its 74.5%.
 
 const SAVE_KEY = 'vk-save-v1';
 
@@ -32,11 +36,11 @@ export const CREW = {
 // car you arrived in; respray also clears unseen Heat (a fresh coat
 // and new plates make the car a different car to the cameras).
 export const UPGRADES = [
-  { id: 'engine', name: 'Engine tune', price: 4000, desc: '+8% top speed', max: 3 },
-  { id: 'armour', name: 'Reinforced armour', price: 3000, desc: '+25% max condition', max: 3 },
-  { id: 'handling', name: 'Handling package', price: 2500, desc: '+10% grip', max: 3 },
-  { id: 'respray', name: 'Respray', price: 450, desc: 'New paint — clears unseen Heat', max: 99 },
-  { id: 'repair', name: 'Repair', price: 300, desc: 'Restore condition to full', max: 99 },
+  { id: 'engine', name: 'Twin-Turbo', price: 4000, desc: '+8% top speed', max: 3 },
+  { id: 'armour', name: 'Kevlar Plates', price: 3000, desc: '+25% max condition', max: 3 },
+  { id: 'handling', name: 'Drift Suspension', price: 2500, desc: '+10% grip', max: 3 },
+  { id: 'respray', name: 'Chameleon Respray', price: 450, desc: 'New paint — clears unseen Heat', max: 99 },
+  { id: 'repair', name: 'Full Repair', price: 300, desc: 'Restore condition to full', max: 99 },
 ];
 
 const PAINTS = [0xff6a4a, 0x3a7ad9, 0xe8c93a, 0x2ea88a, 0xd97bd9, 0xe8e8e8, 0xd97b2e, 0x8a6ad9];
@@ -54,6 +58,10 @@ export class Progression {
     // restoreTune(). The tune lives on the car in memory, so the save
     // has to carry it and the Game has to apply it after the car is built.
     this._savedTune = null;
+    // Activity registry + district standing from the save, held until
+    // the Game builds those systems (same deferred pattern as the tune).
+    this._savedActivities = null;
+    this._savedDistricts = null;
     // Career ledger — every counter is written by the system that earns it.
     this.career = {
       carsStolen: 0,
@@ -120,6 +128,8 @@ export class Progression {
   useCrew(id) {
     if (!this.crewReady(id)) return false;
     this.crewUsed[id] = this.game.time;
+    // Crew Loyalty: every real use counts (FIX ROUND 5).
+    this.game.activities?.recordCrewUse();
     const player = this.game.player;
     if (id === 'mira') {
       this.game.police.heat = Math.max(0, this.game.police.heat - 22);
@@ -202,6 +212,10 @@ export class Progression {
       // a tune bought on a stolen car dies with that car, as the car
       // itself does.
       tune: { ...(this.game.starterCar?.tune || this._savedTune || { engine: 0, armour: 0, handling: 0 }) },
+      // FIX ROUND 5: the activity registry and district standing ride
+      // with the save, so a reloaded career keeps its percentage.
+      activities: this.game.activities?.serialize() ?? null,
+      districts: this.game.districts?.serialize() ?? null,
     };
   }
 
@@ -215,6 +229,8 @@ export class Progression {
     this._savedTune = s.tune
       ? { engine: s.tune.engine || 0, armour: s.tune.armour || 0, handling: s.tune.handling || 0 }
       : null;
+    this._savedActivities = s.activities ?? null;
+    this._savedDistricts = s.districts ?? null;
   }
 
   // Restore the saved garage tune onto the player's own car. Called once
@@ -261,7 +277,7 @@ export class Progression {
         missions: (s.missionsDone ?? []).length,
         cash: s.cash ?? 0,
         rankName,
-        jobName: (s.missionsDone ?? []).length >= 8 ? 'Kingpin' : 'Market Crackdown',
+        jobName: (s.missionsDone ?? []).length >= 8 ? 'Kingpin' : 'Yard Ambush',
       };
     } catch (e) {
       return null;
@@ -274,6 +290,8 @@ export class Progression {
     this.missionsDone = new Set();
     this.ownedCars = [];
     this._savedTune = null;
+    this._savedActivities = null;
+    this._savedDistricts = null;
     if (this.game.starterCar) this.game.starterCar.tune = { engine: 0, armour: 0, handling: 0 };
     this.career = {
       carsStolen: 0, copsEscaped: 0, distanceDriven: 0,

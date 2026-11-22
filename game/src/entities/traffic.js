@@ -8,12 +8,17 @@
 // FIX ROUND 4 — no near-black cars: the re-test faulted "vehicles mostly
 // black blocks". The 0x222226 slot is a mid grey now, so every traffic
 // car reads as painted metal in every preset.
+// FIX ROUND 5 — brake lights are real: a car lights its tails whenever
+// it is braking (stopped for the player, yielding, or held at target
+// speed zero), so a braked queue reads as a queue. Scooters (bikes) join
+// the traffic pool for variety.
 
 import { Car, VEHICLE_CLASSES } from './vehicle.js';
 import { choice, rand } from '../util.js';
 import { edgeHeading, lanePoint, nearestRoadPoint, pickNextEdge, randomEdge } from '../world/roadNetwork.js';
+import { setBraking } from '../world/vehicleMaterials.js';
 
-const TRAFFIC_CLASSES = ['compact', 'sedan', 'sedan', 'muscle', 'van', 'compact'];
+const TRAFFIC_CLASSES = ['compact', 'sedan', 'sedan', 'muscle', 'van', 'compact', 'bike'];
 const COUNT = 20;
 
 export class Traffic {
@@ -104,6 +109,9 @@ export class Traffic {
         }
       }
       if (blocked) targetSpeed = 0;
+      // FIX ROUND 5 — brake lights: on whenever the car is braking
+      // (stopped for the player, yielding, or held at speed zero).
+      setBraking(car, targetSpeed === 0);
       tr.speed += (targetSpeed - tr.speed) * Math.min(1, dt * 1.5);
       tr.t += (tr.side > 0 ? 1 : -1) * (tr.speed * dt) / tr.edge.len;
       if (tr.t >= 1 || tr.t <= 0) {

@@ -49,6 +49,9 @@ export function dampAngle(a, b, lambda, dt) {
 // horizon pushed toward #ff7100-tier orange.
 // FIX ROUND 4: the near-black car slot (0x222226) is a mid grey now —
 // no pure-black cars anywhere (the re-test faulted black-block vehicles).
+// FIX ROUND 5 — identity: the limestone & terracotta pair (lime, limeEdge,
+// terra, terraDeep) is the shared identity palette — buildings, props and
+// the HUD draw the same warm Mediterranean-Caribbean colours from here.
 export const PALETTE = {
   skyTop: 0x9a6ab8,
   skyMid: 0xe8894a,
@@ -71,6 +74,16 @@ export const PALETTE = {
   policeWhite: 0xf2f2f2,
   policeBlack: 0x1a1a20,
   heli: 0x2a2a34,
+  lime: 0xf2e6d8,
+  limeEdge: 0xd9c3a5,
+  terra: 0xd96b43,
+  terraDeep: 0xa84a2e,
+  cream: 0xf5d9a0,
+  gold: 0xfbbf24,
+  red: 0xff4030,
+  teal: 0x14a0b8,
+  night: 0x2a1830,
+  dawn: 0xff7a3c,
 };
 
 export function canvasTexture(w, h, draw, repeatX = 1, repeatY = 1) {

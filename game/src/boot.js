@@ -16,6 +16,10 @@ import { Police } from './entities/police.js';
 import { MissionSystem } from './systems/missions.js';
 import { Combat } from './systems/combat.js';
 import { Progression } from './systems/progression.js';
+import { DistrictStanding } from './systems/activities/districtStanding.js';
+import { ActivityRegistry } from './systems/activities/activityRegistry.js';
+import { buildFlares, updateFlares } from './systems/activities/signalFlares.js';
+import { updateImpound } from './systems/activities/impoundRuns.js';
 import { AudioSys } from './systems/audio.js';
 import { HUD } from './ui/hud.js';
 import { Menus } from './ui/menus.js';
@@ -60,7 +64,7 @@ class Game {
     this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2500);
 
     this.lighting = buildLighting(this.scene);
-    this.city = buildCity(this.scene, this.rng);
+    this.city = buildCity(this.scene, this.rng, this);
     this.roads = { nearestRoadPoint };
     this.input = new Input();
     this.cameraCtl = new CameraCtl(this);
@@ -71,6 +75,18 @@ class Game {
     this.missions = new MissionSystem(this);
     this.combat = new Combat(this);
     this.progression = new Progression(this);
+    // FIX ROUND 5 — the activity registry and district standing live
+    // here, built right after progression (which loads the save) so the
+    // saved activity/district state can be restored onto them.
+    this.districts = new DistrictStanding(this);
+    this.activities = new ActivityRegistry(this);
+    this.activities.restore(this.progression._savedActivities);
+    this.districts.restore(this.progression._savedDistricts);
+    this.flares = buildFlares(this);
+    // Per-frame activity hooks, bound as arrow fields so the registry
+    // can call them without losing `this`.
+    this.updateFlares = () => updateFlares(this);
+    this.updateImpound = () => updateImpound(this);
     this.audio = new AudioSys(this);
     this.hud = new HUD(this);
     this.menus = new Menus(this);
@@ -144,6 +160,9 @@ class Game {
     this.peds.update(dt);
     this.police.update(dt);
     this.missions.update(dt);
+    // FIX ROUND 5 — flare pickups + hot-car exports run every tick, so
+    // the activity registry counts real events, not scripted ones.
+    this.activities.update(dt);
     this.combat.update(dt, input);
     this.city.update(dt, this.time);
     this.audio.update(dt);
@@ -203,6 +222,9 @@ class Game {
     if (this.traffic.cars.includes(car)) {
       this.traffic.steal(car);
       this.police.addHeat(25, 'carjacking');
+      // FIX ROUND 5 — the career ledger counts the steal. (Pre-existing
+      // gap: traffic.steal never recorded it, so Cars Stolen stayed 0.)
+      this.progression.recordCarStolen();
       this.hud.showDialogue('Mira', 'DRIVER', 'Nice — that one is yours now. Lose the heat!');
       this.audio.blip('mission');
     }
@@ -234,7 +256,7 @@ class Game {
     if (this.state !== 'playing') return;
     this.state = 'busted';
     this.progression.addCash(-200);
-    this.menus.showEnd('CAUGHT', 'The VKPD booked you. Bail costs $200 — and the heat is off, for now.');
+    this.menus.showEnd('CAUGHT', 'The VKPD booked you. Bail costs V$200 — and the heat is off, for now.');
     this.audio.blip('fail');
   }
 

@@ -14,13 +14,15 @@
   .panel { background: rgba(10, 14, 26, .88); border: 1.5px solid rgba(255, 194, 122, .55);
     border-radius: 6px; padding: 8px 12px; backdrop-filter: blur(2px); }
 
-  /* Mission card, top-left. Gold accent. */
+  /* Mission card, top-left. Gold accent. Stage pips show progress
+     through the job's stages at a glance. */
   #mission-card { position: absolute; top: 14px; left: 14px; width: 380px;
     background: rgba(10, 14, 26, .88); border: 1.5px solid rgba(251, 191, 36, .55);
     border-left: 5px solid #fbbf24; border-radius: 6px; padding: 10px 14px; }
   .m-job { color: #fbbf24; font-weight: 800; letter-spacing: 1px; font-size: 15px; }
   .m-obj { font-size: 24px; font-weight: 700; line-height: 1.25; margin: 3px 0; }
   .m-stage { color: #9fd8dd; font-size: 15px; letter-spacing: .5px; }
+  .m-pips { color: #9fd8dd; font-size: 14px; letter-spacing: 3px; margin-top: 2px; }
   .m-timer { color: #ff6a4a; font-weight: 800; }
 
   /* Wanted stars, top-centre. GTA 6 states: grey REPORTED, white
@@ -44,10 +46,10 @@
     min-height: 15px; margin-top: 3px; }
   #wanted.heat-only .w-state { color: #f59e0b; }
 
-  /* Witness banner, under the wanted block. FIX ROUND 4: top 112 -> 128
-     so it can never touch the wanted panel (with the heat bar the panel
-     reaches ~106 px). The roster starts at 172 px; the banner (~35 px)
-     ends at ~163 px, clear of both. */
+  /* Witness banner, under the wanted block. Top 128 so it can never
+     touch the wanted panel (with the heat bar the panel reaches
+     ~106 px). The roster starts at 172 px; the banner (~35 px) ends
+     at ~163 px, clear of both. */
   #witness-banner { position: absolute; top: 128px; left: 50%; transform: translateX(-50%);
     display: none; background: rgba(120, 20, 10, .88); border: 1.5px solid #ef4444;
     color: #fff; font-weight: 800; letter-spacing: 1px; font-size: 15px;
@@ -61,6 +63,7 @@
   #police-roster.show { display: block; }
   .r-head { color: #ff9a8a; font-weight: 800; letter-spacing: 1px; margin-bottom: 6px; font-size: 15px; }
   .r-row { display: flex; gap: 8px; align-items: center; padding: 3px 0; }
+  .r-more { color: #ffd9a0; font-weight: 800; letter-spacing: 1px; justify-content: center; }
   .r-dot { width: 9px; height: 9px; border-radius: 50%; background: #ff3a3a; flex: none; }
   .r-row b { margin-left: auto; color: #ffd9a0; }
   .badge { font-style: normal; font-size: 12px; font-weight: 800; letter-spacing: .5px;
@@ -73,7 +76,7 @@
   .b-pursuit { background: #b91c1c; }
   .b-search { background: #4b5563; }
 
-  /* Cash + respect, top-right. Gold accent. */
+  /* Cash + respect + clock, top-right. Gold accent. */
   #cash-box { position: absolute; top: 14px; right: 14px; text-align: right;
     background: rgba(10, 14, 26, .88); border: 1.5px solid rgba(251, 191, 36, .55);
     border-radius: 6px; padding: 8px 14px; }
@@ -81,14 +84,23 @@
   .rank { font-size: 14px; letter-spacing: 1px; color: #ffd9a0; margin-top: 3px; }
   .rank-bar { width: 170px; height: 6px; background: #3a2a3a; border-radius: 3px; margin-top: 4px; margin-left: auto; }
   .rank-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff6a4a, #ffc27a); border-radius: 3px; }
+  .clock { font-size: 15px; color: #9fd8dd; font-weight: 700; letter-spacing: 2px; margin-top: 4px; }
 
-  /* Minimap, bottom-left. FIX ROUND 4: 230 -> 260 px (the re-test
-     faulted the small flat minimap). */
-  #minimap-wrap { position: absolute; left: 14px; bottom: 14px; width: 266px; height: 266px; }
-  #minimap { width: 260px; height: 260px; border-radius: 50%; display: block;
+  /* Minimap, bottom-left. 260 px colour canvas with the health and
+     armour bars and the location label stacked beneath it (the wrap
+     grows with its content: height auto). */
+  #minimap-wrap { position: absolute; left: 14px; bottom: 14px; width: 206px; height: auto; }
+  #minimap { width: 200px; height: 200px; border-radius: 50%; display: block;
     border: 3px solid rgba(255, 194, 122, .85); background: #1d6f7d; }
-  #location { position: absolute; bottom: -2px; left: 0; right: 0; text-align: center;
-    font-size: 13px; letter-spacing: 2px; color: #ffd9a0; font-weight: 700; }
+  #health-armour { margin-top: 6px; }
+  .ha-row { display: flex; align-items: center; gap: 8px; margin: 3px 0; font-size: 12px; }
+  .ha-row span { width: 52px; color: #ffd9a0; font-weight: 700; letter-spacing: 1px; flex: none; }
+  .ha-bar { flex: 1; height: 8px; background: #3a2a3a; border-radius: 4px; overflow: hidden; }
+  .ha-bar i { display: block; height: 100%; background: #7ddb8a; border-radius: 4px; }
+  .ha-row:nth-child(2) .ha-bar i { background: #38bdf8; }
+  .ha-row b { width: 30px; text-align: right; color: #fff; flex: none; }
+  #location { position: static; text-align: center; font-size: 13px;
+    letter-spacing: 2px; color: #ffd9a0; font-weight: 700; margin-top: 4px; }
 
   /* Speed, bottom-right. Cyan accent. */
   #speed-box { position: absolute; right: 14px; bottom: 14px; text-align: right;
@@ -101,25 +113,25 @@
   .cond i { display: block; height: 100%; background: #7ddb8a; border-radius: 3px; }
   .cond-lbl { font-size: 13px; color: #b0a0b0; margin-top: 2px; }
 
-  /* Weapon slots + radio, right edge. */
-  #weapon-slots { position: absolute; right: 14px; top: 130px; display: flex; flex-direction: column; gap: 5px; }
-  .ws { background: rgba(10, 14, 26, .88); border: 1.5px solid rgba(255, 255, 255, .18);
-    border-radius: 5px; padding: 5px 9px; font-size: 15px; font-weight: 700; letter-spacing: 1px; }
-  .ws b { color: #9fd8dd; margin-right: 6px; }
-  .ws span { color: #b0a0b0; margin-left: 6px; font-weight: 400; }
-  .ws.on { border-color: #ffc27a; background: rgba(255, 140, 60, .3); }
-  #radio-box { position: absolute; right: 14px; top: 350px; color: #ff9ad9; font-size: 14px;
-    font-weight: 700; letter-spacing: 1px; background: rgba(10, 14, 26, .88);
-    padding: 5px 9px; border-radius: 5px; }
+  /* One weapon chip, right edge under the cash box: the current weapon
+     only — no full weapon list, no radio box, no wheel. */
+  #weapon-chip { position: absolute; right: 14px; top: 130px;
+    background: rgba(10, 14, 26, .88); border: 1.5px solid rgba(255, 194, 122, .55);
+    border-radius: 6px; padding: 7px 12px; font-size: 16px; font-weight: 700; letter-spacing: 1px; }
+  #weapon-chip b { color: #ffc27a; }
+  #weapon-chip span { color: #9fd8dd; margin-left: 8px; }
 
-  /* Crew chips, right bottom. Cyan accent. */
-  #crew-chips { position: absolute; right: 14px; bottom: 150px; display: flex; flex-direction: column; gap: 5px; }
-  .crew { background: rgba(10, 14, 26, .88); border: 1.5px solid rgba(56, 189, 248, .4);
-    border-radius: 5px; padding: 5px 9px; font-size: 15px; }
-  .crew b { color: #ffc27a; margin-right: 6px; }
-  .crew i { font-style: normal; color: #b0a0b0; margin-left: 6px; }
-  .crew.ready { border-color: #7ddb8a; }
-  .crew.ready i { color: #7ddb8a; }
+  /* Crew icons, right edge above the speed box: a 54 px cooldown ring
+     (conic gradient) around a dark core with the crew key. */
+  #crew-icons { position: absolute; right: 14px; bottom: 150px; display: flex;
+    flex-direction: column; gap: 10px; align-items: center; }
+  .crew-item { display: flex; flex-direction: column; align-items: center; width: 64px; }
+  .ci-ring { width: 54px; height: 54px; border-radius: 50%; padding: 3px; }
+  .ci-core { width: 100%; height: 100%; border-radius: 50%; background: rgba(10, 14, 26, .92);
+    color: #fff; font-size: 20px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .crew-item.ready .ci-core { color: #7ddb8a; }
+  .crew-item span { font-size: 12px; font-weight: 700; color: #ffd9a0; margin-top: 3px; }
+  .crew-item i { font-style: normal; font-size: 11px; color: #b0a0b0; }
 
   /* Dialogue, bottom-centre (above the scanner ticker). */
   #dialogue { position: absolute; left: 50%; bottom: 52px; transform: translateX(-50%);
@@ -138,8 +150,8 @@
   #banner { position: absolute; left: 50%; top: 34%; transform: translate(-50%, -50%);
     text-align: center; display: none; }
   #banner.show { display: block; }
-  #banner h2 { font-size: 40px; letter-spacing: 3px; color: #ffc27a;
-    text-shadow: 0 2px 12px rgba(0,0,0,.8); }
+  .banner-title { font-size: 40px; letter-spacing: 3px; color: #ffc27a;
+    text-shadow: 0 2px 12px rgba(0,0,0,.8); font-weight: 800; }
   #banner p { font-size: 16px; color: #fff; margin-top: 4px; }
 
   /* Prompt, above the dialogue. */
@@ -172,20 +184,6 @@
   #vignette.boom { box-shadow: inset 0 0 140px 60px rgba(255, 120, 20, .6); }
   #vignette.land { box-shadow: inset 0 0 90px 20px rgba(255, 255, 255, .35); }
 
-  /* Weapon wheel. */
-  #weapon-wheel { position: absolute; left: 50%; top: 50%; width: 260px; height: 260px;
-    transform: translate(-50%, -50%); display: none; }
-  #weapon-wheel.open { display: block; }
-  .ww-slot { position: absolute; left: 50%; top: 50%; width: 110px; padding: 8px 10px;
-    background: rgba(10, 14, 26, .88); border: 1.5px solid rgba(255, 194, 122, .5);
-    border-radius: 6px; text-align: center; }
-  .ww-slot:nth-child(1) { transform: translate(-50%, -50%) translateY(-105px); }
-  .ww-slot:nth-child(2) { transform: translate(-50%, -50%) translateX(105px); }
-  .ww-slot:nth-child(3) { transform: translate(-50%, -50%) translateY(105px); }
-  .ww-slot:nth-child(4) { transform: translate(-50%, -50%) translateX(-105px); }
-  .ww-slot b { display: block; color: #9fd8dd; }
-  .ww-slot span { font-weight: 700; letter-spacing: 1px; }
-
   /* Menus. */
   #menus { position: absolute; inset: 0; z-index: 10; pointer-events: none; }
   #title-screen, #pause-screen, #end-screen { position: absolute; inset: 0; display: none;
@@ -193,7 +191,7 @@
     background: linear-gradient(180deg, rgba(26, 10, 30, .55), rgba(60, 20, 40, .78)); }
   #title-screen.show, #pause-screen.show, #end-screen.show { display: flex; }
   .t-kicker { letter-spacing: 5px; color: #9fd8dd; font-size: 13px; font-weight: 700; }
-  #title-screen h1, #pause-screen h1, #end-screen h1 { font-size: 84px; line-height: .95;
+  #title-screen h1, #end-screen h1, .pause-title { font-size: 84px; line-height: .95;
     letter-spacing: 4px; color: #ffc27a; text-shadow: 0 4px 30px rgba(255, 120, 40, .6); margin: 14px 0; }
   .t-sub { font-size: 18px; color: #ffe9c9; max-width: 640px; }
   .t-controls { display: flex; flex-wrap: wrap; gap: 8px 18px; justify-content: center;
@@ -206,44 +204,59 @@
   .p-row span { margin: 0 10px; }
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
 
-  /* Career screen (T). FIX ROUND 4: the panels no longer stretch to
-     fill the screen (flex: 1 left ~200 px of empty panel under the
-     stats and saves). Content-height panels, centred vertically, so
-     the screen reads as composed, not empty. */
+  /* Career screen (T): warm glass over the live aerial render — the
+     daytime Keys show through, never a flat navy slab. Three giant
+     numbers on top (completion ring, rank, activities), then the nine
+     activity bars, the small tinted district map, and the save slots
+     with crew and ledger. The content is sized to fit 720 px: the
+     head, giants and panels together stay under the viewport, so
+     nothing is cut at the top or bottom. */
   #career-screen { position: absolute; inset: 0; display: none; flex-direction: column;
-    justify-content: center; background: #080a14; padding: 26px 36px; }
+    justify-content: center; padding: 18px 36px;
+    background: linear-gradient(180deg, rgba(30, 18, 8, .62), rgba(52, 26, 10, .78)); }
   #career-screen.show { display: flex; }
   .career-head { display: flex; justify-content: space-between; align-items: baseline; }
-  .career-head h1 { font-size: 34px; letter-spacing: 3px; color: #fbbf24; }
-  .career-head span { font-size: 17px; color: #ffd9a0; font-weight: 700; }
-  .career-panels { display: flex; gap: 20px; margin-top: 16px; flex: 0 0 auto; min-height: 0; }
-  .career-panel { flex: 1; background: rgba(10, 14, 26, .92); border: 1.5px solid rgba(251, 191, 36, .55);
-    border-radius: 8px; padding: 14px 16px; }
+  .career-title { font-size: 30px; letter-spacing: 3px; color: #fbbf24; font-weight: 800; }
+  .career-head span { font-size: 16px; color: #ffd9a0; font-weight: 700; }
+  .career-giants { display: flex; gap: 20px; margin-top: 10px; }
+  .giant { flex: 1; background: rgba(34, 22, 12, .88); border: 1.5px solid rgba(251, 191, 36, .55);
+    border-radius: 8px; padding: 8px; text-align: center; min-height: 100px; position: relative;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .giant-num { font-size: 34px; font-weight: 800; color: #ffc27a; line-height: 1.05; }
+  .giant-kicker { font-size: 13px; letter-spacing: 2px; color: #9fd8dd; font-weight: 700; }
+  .giant-sub { font-size: 13px; color: #c8d0dc; margin-top: 2px; }
+  .ring-cell .giant-num { font-size: 28px; position: relative; }
+  .ring-svg { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    width: 96px; height: 96px; }
+  .ring-bg { fill: none; stroke: rgba(255, 255, 255, .18); stroke-width: 9; }
+  .ring-fg { fill: none; stroke: #fbbf24; stroke-width: 9; stroke-linecap: round;
+    transform: rotate(-90deg); transform-origin: 50% 50%; }
+  .career-panels { display: flex; gap: 20px; margin-top: 12px; flex: 0 0 auto; min-height: 0; }
+  .career-panel { flex: 1; background: rgba(34, 22, 12, .88); border: 1.5px solid rgba(251, 191, 36, .55);
+    border-radius: 8px; padding: 12px 14px; }
   .map-panel { flex: 1.5; }
-  .cp-head { font-size: 16px; font-weight: 800; letter-spacing: 1px; color: #fbbf24; margin-bottom: 10px; }
-  .cs-row { display: flex; justify-content: space-between; padding: 6px 0;
-    border-bottom: 1px solid rgba(255, 255, 255, .08); font-size: 16px; }
+  .cp-head { font-size: 15px; font-weight: 800; letter-spacing: 1px; color: #fbbf24; margin-bottom: 8px; }
+  .cp-head-gap { margin-top: 10px; }
+  .cs-row { display: flex; justify-content: space-between; padding: 4px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, .08); font-size: 14px; }
   .cs-row span { color: #c8d0dc; }
   .cs-row b { color: #fff; }
-  .cs-foot { margin-top: 14px; font-size: 14px; color: #9fd8dd; font-weight: 700; }
-  .slot { padding: 10px 12px; border: 1.5px solid rgba(255, 255, 255, .2); border-radius: 6px; margin-bottom: 10px; }
-  .slot b { display: block; font-size: 16px; }
-  .slot span { color: #c8d0dc; font-size: 14px; }
+  .act-row { display: flex; align-items: center; gap: 10px; padding: 4px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, .08); font-size: 13px; }
+  .act-row span { width: 168px; color: #c8d0dc; flex: none; }
+  .act-bar { flex: 1; height: 8px; background: #2a3442; border-radius: 4px; overflow: hidden; }
+  .act-bar i { display: block; height: 100%; background: linear-gradient(90deg, #ff6a4a, #ffc27a); border-radius: 4px; }
+  .act-row b { width: 64px; text-align: right; color: #fff; flex: none; }
+  .slot { padding: 7px 10px; border: 1.5px solid rgba(255, 255, 255, .2); border-radius: 6px; margin-bottom: 7px; }
+  .slot b { display: block; font-size: 14px; }
+  .slot span { color: #c8d0dc; font-size: 13px; }
   .slot.empty { opacity: .5; }
-  #career-map { width: 100%; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .2); display: block; }
-  .map-legend { display: flex; gap: 16px; margin-top: 10px; font-size: 13px; color: #c8d0dc; }
+  #career-map { width: 92%; margin: 0 auto; border-radius: 6px; border: 1px solid rgba(255, 255, 255, .2); display: block; }
+  .map-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 13px; color: #c8d0dc; }
   .map-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; }
   .lg-gold { background: #ffc27a; } .lg-cyan { background: #38bdf8; }
   .lg-red { background: #ff4030; } .lg-white { background: #fff; }
-  .career-strip { display: flex; gap: 10px; margin-top: 16px; }
-  .ms { flex: 1; background: rgba(10, 14, 26, .92); border: 1.5px solid rgba(255, 255, 255, .18);
-    border-radius: 6px; padding: 8px 10px; }
-  .ms.done { border-color: rgba(251, 191, 36, .7); }
-  .ms b { display: block; font-size: 13px; color: #ffd9a0; }
-  .ms span { display: block; font-size: 12px; color: #c8d0dc; margin-top: 2px; }
-  .ms i { font-style: normal; font-size: 12px; font-weight: 800; color: #7ddb8a; }
-  .ms:not(.done) i { color: #8a94a6; }
-  .career-close { text-align: center; margin-top: 12px; font-size: 14px; letter-spacing: 2px; color: #9fd8dd; }
+  .career-close { text-align: center; margin-top: 8px; font-size: 14px; letter-spacing: 2px; color: #9fd8dd; }
 
   /* Garage screen (E at the garage): right-side panel, the 3D car shows left. */
   #garage-screen { position: absolute; inset: 0; display: none; justify-content: flex-end;
@@ -281,7 +294,7 @@
     background: rgba(40, 0, 0, .8); font: 12px monospace; padding: 2px 8px; white-space: pre-wrap; }
   @media (max-width: 900px) {
     #mission-card { width: 250px; } .m-obj { font-size: 15px; }
-    #minimap-wrap { width: 140px; height: 140px; } #minimap { width: 134px; height: 134px; }
+    #minimap-wrap { width: 140px; height: auto; } #minimap { width: 134px; height: 134px; }
     #title-screen h1 { font-size: 52px; }
   }
 </style>

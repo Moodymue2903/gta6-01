@@ -26,7 +26,10 @@ void main() {
   vec3 col = mix(horizonColor, midColor, smoothstep(0.0, 0.25, h));
   col = mix(col, topColor, smoothstep(0.2, 0.75, h));
   float s = max(dot(normalize(vDir), normalize(sunDir)), 0.0);
-  col += sunColor * (pow(s, 220.0) * 1.4 + pow(s, 10.0) * 0.30);
+  // FIX ROUND 6: the wide sun wash (pow 10) was 0.30 — it flooded the
+  // whole western sky orange and flattened the gradient. 0.18 keeps the
+  // disc bright and lets the violet/rose bands survive around it.
+  col += sunColor * (pow(s, 220.0) * 1.4 + pow(s, 10.0) * 0.18);
   gl_FragColor = vec4(col, 1.0);
 }`;
 
@@ -45,12 +48,17 @@ void main() {
 // Every preset also carries its clock start (minutes from midnight): the
 // HUD clock is the preset's time plus one game-minute per sim second.
 const PRESETS = {
-  // Bright golden hour (cover). The fix-1 values, unchanged.
+  // Bright golden hour (cover). FIX ROUND 6 — the fix-1 sky read as one
+  // flat orange band: the mid and horizon were both orange, so the whole
+  // visible sky was a single colour. The target is a nuanced sunset:
+  // deep violet zenith, rose-pink middle band, golden horizon, with the
+  // haze to match (rose, not orange) so distant buildings melt into
+  // pink-violet depth instead of monochrome amber.
   golden: {
     sunDir: [-0.55, 0.22, -0.62], sunColor: 0xffb347, sunIntensity: 3.4,
-    skyTop: 0x9a6ab8, skyMid: 0xe8894a, skyHorizon: 0xff8a2a, sunGlow: 0xffe0b0,
-    fog: 0xff9a45, hemiSky: 0xffb98a, hemiGround: 0x8a6a72, hemiIntensity: 1.35,
-    rimColor: 0x7a9fff, rimIntensity: 0.9, fillColor: 0xffd9a0, fillIntensity: 0.85,
+    skyTop: 0x5a3a8a, skyMid: 0xd95a7a, skyHorizon: 0xff9a3a, sunGlow: 0xffe0b0,
+    fog: 0xe88a6a, hemiSky: 0xffb98a, hemiGround: 0x8a6a72, hemiIntensity: 1.6,
+    rimColor: 0x7a9fff, rimIntensity: 0.9, fillColor: 0xffd9a0, fillIntensity: 1.3,
     cloud: 0xffe0b8, exposure: 1.3, clockStart: 1060,
   },
   // Bright daylight (foot): high blue sky, pale horizon, teal water.

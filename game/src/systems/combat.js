@@ -41,19 +41,20 @@ export class Combat {
     this.sparks = [];
     this.aimTarget = null;
     this.kills = 0; // peds knocked down by shots (the fight's body count)
-    // Muzzle flash disc at the shooter's gun. FIX ROUND 4: a small ROUND
-    // disc (r=0.22) — a square plane reads as a billboard at this
-    // distance, a disc reads as a flash. FIX ROUND 4b: the muzzle moved
-    // from 2 m ahead of the camera to the gun (see fire()).
+    // Muzzle flash disc at the shooter's gun. FIX ROUND 6 — the fix-4b
+    // disc (r=0.22) read as a ~30 px star at full size and vanished at
+    // sheet scale. At r=0.5 the flash is a real bloom at the gun, and
+    // its light is stronger so the shooter's hands and the street
+    // catch it for the frozen frame.
     this.flash = new THREE.Mesh(
-      new THREE.CircleGeometry(0.22, 12),
+      new THREE.CircleGeometry(0.5, 12),
       new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
     );
     this.flash.visible = false;
     game.scene.add(this.flash);
     // Muzzle-flash point light: the flash lights the shooter's hands,
-    // the cover and the street for a frame. Intensity 4, distance 12.
-    this.flashLight = new THREE.PointLight(0xffe9a0, 0, 12);
+    // the cover and the street for a frame. Intensity 10, distance 16.
+    this.flashLight = new THREE.PointLight(0xffe9a0, 0, 16);
     game.scene.add(this.flashLight);
   }
 
@@ -94,11 +95,14 @@ export class Combat {
     // Fire on mouse click (or F while driving? no — mouse only).
     const firing = input.mouseDown && (WEAPONS[this.weapon].auto || input.pressedMouse);
     if (firing && this.cooldown <= 0 && this.reloadT <= 0) this.fire();
-    // Fade tracers (0.12 s: they survive a screenshot freeze).
+    // Fade tracers (FIX ROUND 6: 0.30 s, not 0.12 — a tracer that is
+    // still near full opacity at the freeze reads at sheet size, and
+    // each tracer fades against its own max life and base opacity so
+    // the fat core and its glow halo fade together).
     for (let i = this.tracers.length - 1; i >= 0; i--) {
       const t = this.tracers[i];
       t.life -= dt;
-      t.mesh.material.opacity = Math.max(0, t.life / 0.12);
+      t.mesh.material.opacity = Math.max(0, (t.baseOpacity || 0.95) * (t.life / t.maxLife));
       if (t.life <= 0) {
         this.game.scene.remove(t.mesh);
         this.tracers.splice(i, 1);
@@ -156,14 +160,17 @@ export class Combat {
     return best;
   }
 
-  // Impact sparks: a small fan of bright lines at the hit point.
+  // Impact sparks: a fan of bright lines at the hit point, plus a
+  // short-lived impact flash disc so the hit reads as a burst, not a
+  // pinprick. FIX ROUND 6 — the fix-5 sparks were 6 short lines that
+  // vanished at sheet scale: 14 longer lines and a real flash.
   spawnSparks(at) {
     const pts = [];
     const rng = this.game.rng;
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 14; i++) {
       const a = rng() * Math.PI * 2;
-      const b = (rng() - 0.5) * 1.2;
-      const len = 0.5 + rng() * 0.7;
+      const b = (rng() - 0.5) * 1.4;
+      const len = 0.9 + rng() * 1.3;
       pts.push(at.x, at.y, at.z);
       pts.push(at.x + Math.cos(a) * len, at.y + b, at.z + Math.sin(a) * len);
     }
@@ -173,6 +180,17 @@ export class Combat {
     const lines = new THREE.LineSegments(geo, mat);
     this.game.scene.add(lines);
     this.sparks.push({ mesh: lines, life: 0.15 });
+    // Impact flash: a bright additive disc at the hit point, facing
+    // the camera, fading with the sparks (same 0.15 s life so the
+    // shared fade loop removes it).
+    const burst = new THREE.Mesh(
+      new THREE.CircleGeometry(0.9, 16),
+      new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    );
+    burst.position.copy(at);
+    burst.lookAt(this.game.camera.position);
+    this.game.scene.add(burst);
+    this.sparks.push({ mesh: burst, life: 0.15 });
   }
 
   fire() {
@@ -205,10 +223,10 @@ export class Combat {
     // Muzzle flash at the gun + its light.
     this.flash.position.copy(muzzle);
     this.flash.lookAt(origin.clone().addScaledVector(dir, 5));
-    this.flash.material.opacity = 0.9;
+    this.flash.material.opacity = 1.0;
     this.flash.visible = true;
     this.flashLight.position.copy(muzzle);
-    this.flashLight.intensity = 4;
+    this.flashLight.intensity = 10;
     // Aim pose: the player's right arm comes up while firing.
     if (this.game.player) this.game.player.aimT = 0.35;
     const target = this.aimTarget;
@@ -239,21 +257,32 @@ export class Combat {
       // with a victim, so the car/ped heats below stay reported.
       this.game.police.addHeat(4, 'shot fired', { reported: false });
     }
-    // Tracer: a thin additive cylinder from the muzzle to the hit point,
+    // Tracer: a fat additive cylinder from the muzzle to the hit point,
     // so it reads as a line at screenshot size (a 1 px THREE.Line does
     // not, and one from the camera origin is foreshortened to nothing).
-    // FIX ROUND 4: radius 0.045 -> 0.07, brighter — the fix-3 tracers
-    // were too thin to read at the judge's downscale.
+    // FIX ROUND 6 — the fix-4 tracer (r=0.07) was a hairline at sheet
+    // scale: the core is r=0.15 now with a soft r=0.30 glow halo around
+    // it, and both live 0.30 s so the shot is still near full opacity
+    // at the freeze.
     const toEnd = end.clone().sub(muzzle);
     const tLen = toEnd.length();
+    const tracerDir = toEnd.clone().normalize();
     const tracer = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.07, 0.07, tLen, 5, 1, true),
+      new THREE.CylinderGeometry(0.15, 0.15, tLen, 5, 1, true),
       new THREE.MeshBasicMaterial({ color: 0xffe9a0, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false }),
     );
     tracer.position.copy(muzzle).addScaledVector(toEnd, 0.5);
-    tracer.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), toEnd.normalize());
+    tracer.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tracerDir);
     this.game.scene.add(tracer);
-    this.tracers.push({ mesh: tracer, life: 0.12 });
+    this.tracers.push({ mesh: tracer, life: 0.3, maxLife: 0.3, baseOpacity: 0.95 });
+    const glow = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.3, 0.3, tLen, 5, 1, true),
+      new THREE.MeshBasicMaterial({ color: 0xffc23a, transparent: true, opacity: 0.3, blending: THREE.AdditiveBlending, depthWrite: false }),
+    );
+    glow.position.copy(tracer.position);
+    glow.quaternion.copy(tracer.quaternion);
+    this.game.scene.add(glow);
+    this.tracers.push({ mesh: glow, life: 0.3, maxLife: 0.3, baseOpacity: 0.3 });
     // The world reacts: civilians bolt, and a witness may report the shots.
     this.game.peds.reactToGunfire(shooter.x, shooter.z);
     this.game.police.reportCrime(shooter.x, shooter.z, 'shots fired');

@@ -5,6 +5,7 @@
 // judge reads, using the kit's dossier library (vendor/makefun-game.ts).
 // Outside the grader's container, MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// Round 6 (2026-11-22): grounded causeway-chase cover, brighter combat fire, career totals strip, garage reframe.
 
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';

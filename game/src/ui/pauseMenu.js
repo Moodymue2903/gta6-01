@@ -84,6 +84,13 @@ export function renderCareer(game, el, vm) {
   const slots = c.slots.map((s) => `<div class="slot${s.empty ? ' empty' : ''}"><b>${s.title}</b><span>${s.line}</span></div>`).join('');
   const crew = vm.crew.map((m) => `<div class="cs-row"><span>${m.key} · ${m.name} — ${m.role}</span><b>${m.label}</b></div>`).join('');
   const lg = c.ledger;
+  // Bottom strip (FIX ROUND 6): the three headline totals the target
+  // leads with — trophies, respect, earnings — as one clean row under
+  // the panels, so the career reads top (giants) -> middle (tracks)
+  // -> bottom (totals). Every figure comes from the live view-model:
+  // the medals and respect rows of the activity list, and the cash.
+  const medals = c.activities.find((a) => a.id === 'medals');
+  const respect = c.activities.find((a) => a.id === 'respect');
   el.innerHTML = `
     <div class="career-head"><div class="career-title">VERMILION CAREER</div><span>${c.rank} · ${c.respectLine} · ${c.cash} · ${vm.clock}</span></div>
     <div class="career-giants">
@@ -114,6 +121,11 @@ export function renderCareer(game, el, vm) {
         <div class="cs-row"><span>RACES WON</span><b>${lg.racesWon}</b></div>
         <div class="cs-row"><span>HIGHEST WANTED</span><b>${lg.highestWanted}</b></div>
       </div>
+    </div>
+    <div class="career-strip">
+      <div class="strip-box"><div class="strip-kicker">TROPHIES</div><div class="strip-num">${medals ? medals.label : ''}</div><div class="strip-sub">GOLD JOB MEDALS</div></div>
+      <div class="strip-box"><div class="strip-kicker">RESPECT</div><div class="strip-num">${respect ? respect.label : ''}</div><div class="strip-sub">SYNDICATE STANDING</div></div>
+      <div class="strip-box"><div class="strip-kicker">EARNINGS</div><div class="strip-num">${c.cash}</div><div class="strip-sub">CASH ON HAND</div></div>
     </div>
     <div class="career-close">T / ESC — CLOSE</div>`;
   const canvas = document.getElementById('career-map');

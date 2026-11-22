@@ -22,16 +22,20 @@ export function stageCoverDensity(game) {
   const g = game;
   // Eight cars pulled onto the roads near the causeway.
   g.traffic.placeNear(278, 0, 8);
-  // A braked queue: three westbound cars behind the roadblock (north
-  // lane, z=-2.2) and three eastbound cars on the far side (z=+2.2),
-  // all stopped with brake lights on.
+  // A braked queue: three westbound cars held at the roadblock on the
+  // flat west approach (north lane, z=-2.2) and three eastbound cars on
+  // the far side (z=+2.2), all stopped with brake lights on.
+  // FIX ROUND 6 — the fix-5 queue sat at x 236-252, ON the raised
+  // drawbridge leaves: with the cover's bridge lowered for the
+  // grounded chase, those cars would float where the ramp was. The
+  // queue now holds on flat road west of the bridge (x 200-224).
   const queue = [
-    { x: 236, z: -2.2, h: -Math.PI / 2 },
-    { x: 244, z: -2.2, h: -Math.PI / 2 },
-    { x: 252, z: -2.2, h: -Math.PI / 2 },
-    { x: 210, z: 2.2, h: Math.PI / 2 },
-    { x: 218, z: 2.2, h: Math.PI / 2 },
-    { x: 226, z: 2.2, h: Math.PI / 2 },
+    { x: 204, z: -2.2, h: -Math.PI / 2 },
+    { x: 212, z: -2.2, h: -Math.PI / 2 },
+    { x: 220, z: -2.2, h: -Math.PI / 2 },
+    { x: 208, z: 2.2, h: Math.PI / 2 },
+    { x: 216, z: 2.2, h: Math.PI / 2 },
+    { x: 224, z: 2.2, h: Math.PI / 2 },
   ];
   let qi = 0;
   for (const car of g.traffic.cars) {
@@ -52,14 +56,21 @@ export function stageCoverDensity(game) {
   }
   // A scooter in the queue: a Key Hopper (bike) filtering past the
   // stopped cars on the north lane.
-  const scooter = new Car(g, 'bike', 0xe8c93a, 240, -4.6, -Math.PI / 2);
+  // FIX ROUND 6 — the fix-5 scooter sat at (240,-4.6), over the
+  // drawbridge gap itself; grounded, it belongs east of the bridge,
+  // filtering past the chase on the north lane by the hero car.
+  const scooter = new Car(g, 'bike', 0xe8c93a, 268, -4.6, -Math.PI / 2);
   scooter.speed = 0;
   g.traffic.cars.push(scooter);
   // Sixteen pedestrians on the promenade / sidewalks by the bridge.
+  // FIX ROUND 6 — the south row is bunched west of the bridge
+  // (2.5 m spacing, x 232-250): the fix-5 row ran to x 270, and the
+  // cover camera now sits at (272, 9) — a ped 3 m from the lens
+  // would fill the frame. The north row keeps its full spread.
   const pedSpots = [];
   for (let i = 0; i < 16; i++) {
     pedSpots.push({
-      x: 232 + (i % 8) * 5.5,
+      x: 232 + (i % 8) * (i < 8 ? 2.5 : 5.5),
       z: i < 8 ? 9 + (i % 3) * 2 : -9 - (i % 3) * 2,
       flee: i < 6,
     });

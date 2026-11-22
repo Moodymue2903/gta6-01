@@ -184,6 +184,23 @@ export function buildCity(scene, rng, game) {
   eastApproach.position.set(231, 0.05, 0);
   eastApproach.receiveShadow = true;
   scene.add(eastApproach);
+  // FIX ROUND 6 — wet causeway band: the chase stretch (x 230-300)
+  // is dark wet asphalt, not the tan promenade slabs, so the road
+  // reads as a road and the sun glints on it read as reflections.
+  // It sits 2 cm above the road mesh (no z-fight at this range) and
+  // just below the lane dashes, which still poke through it.
+  const wetBand = new THREE.Mesh(
+    new THREE.PlaneGeometry(70, 10),
+    // FIX ROUND 6 (finish): Lambert has no specular, so the band read
+    // as flat dark grey, not wet. Phong with a warm specular gives the
+    // low sun a real glint on the asphalt, and the additive streaks
+    // below read as reflections on top of it.
+    new THREE.MeshPhongMaterial({ color: 0x484852, specular: 0xff9a50, shininess: 70, map: speckleTexture(100) }),
+  );
+  wetBand.rotation.x = -Math.PI / 2;
+  wetBand.position.set(265, 0.08, 0);
+  wetBand.receiveShadow = true;
+  scene.add(wetBand);
   void CAUSEWAYS;
 
   // --- Roads + sidewalks, merged into two meshes. ---
@@ -685,6 +702,11 @@ export function buildCity(scene, rng, game) {
       if (plotRng() < 0.6) palmSpots.push({ x: x + 8, z });
     }
   }
+  // FIX ROUND 6 — causeway palms, REMOVED: a palm crown in this
+  // engine is a solid 3.4 m cone, and one 15-30 m from the cover
+  // camera filled the frame as a giant green pyramid, not a palm.
+  // The boulevard palms already in the world carry the palm read
+  // from a distance; the causeway stays clear.
   const trunkGeo = new THREE.CylinderGeometry(0.28, 0.45, 7, 6);
   trunkGeo.translate(0, 3.5, 0);
   const trunks = new THREE.InstancedMesh(trunkGeo, new THREE.MeshLambertMaterial({ color: PALETTE.palmTrunk }), palmSpots.length);
@@ -839,6 +861,100 @@ export function buildCity(scene, rng, game) {
   crane.add(cBox);
   scene.add(crane);
 
+  // FIX ROUND 6 — cargo ship + dock crane on the north side of the
+  // east causeway mouth, so the cover's right side carries the port
+  // (cranes, containers, a ship in the channel) the way the target
+  // does. Permanent world landmarks, not staging: the ship sits in
+  // the channel water just north of the causeway (the water plane is
+  // at y -1.5, so the hull sits low with its deck just above it),
+  // moored east-west along the channel so the cover camera sees its
+  // long side, and the crane stands on the Caldera Docks bank above
+  // it with its jib over the water.
+  {
+    const ship = new THREE.Group();
+    const hull = new THREE.Mesh(
+      new THREE.BoxGeometry(34, 3.2, 9),
+      new THREE.MeshLambertMaterial({ color: 0x2a3542 }),
+    );
+    hull.position.y = 0;
+    hull.castShadow = true;
+    ship.add(hull);
+    const bow = new THREE.Mesh(
+      new THREE.BoxGeometry(3, 3.2, 9),
+      new THREE.MeshLambertMaterial({ color: 0xd93a2a }),
+    );
+    bow.position.set(17.5, 0, 0);
+    ship.add(bow);
+    const contCols = [0xd93a2a, 0x2ea88a, 0xe8c93a, 0x3a7ad9, 0xff7a55];
+    for (let i = 0; i < 8; i++) {
+      const c = new THREE.Mesh(
+        new THREE.BoxGeometry(6, 2.4, 7.6),
+        new THREE.MeshLambertMaterial({ color: contCols[i % contCols.length] }),
+      );
+      c.position.set(-12 + i * 6.4, 2.6, 0);
+      c.castShadow = true;
+      ship.add(c);
+    }
+    // FIX ROUND 6 (finish): the first placement put the ship 14.5 m
+    // off the causeway with a 7 m blank cream tower dead on the cover
+    // camera's sightline — it read as a giant pale box, not a ship.
+    // The ship now sits 10 m further out in the channel and the tower
+    // is lower and slate, so it reads as a superstructure on the
+    // right of the frame, with the containers carrying the colour.
+    const tower = new THREE.Mesh(
+      new THREE.BoxGeometry(4, 5, 8),
+      new THREE.MeshLambertMaterial({ color: 0x8a97a8 }),
+    );
+    tower.position.set(-15.5, 4.0, 0);
+    tower.castShadow = true;
+    ship.add(tower);
+    const funnel = new THREE.Mesh(
+      new THREE.BoxGeometry(2.4, 3, 4),
+      new THREE.MeshLambertMaterial({ color: 0xff7a55 }),
+    );
+    funnel.position.set(-12.5, 7.2, 0);
+    ship.add(funnel);
+    // FIX ROUND 6 (finish 2): the ship was moored north-south, so
+    // the camera saw its 9 m end and the tower's 8 m side — a big
+    // blank slab, grey instead of cream. Moored east-west along the
+    // channel, the camera sees the 34 m side: a long cargo-ship
+    // profile with the colourful containers on deck, the tower at
+    // the west end. (The tower's local offset now maps to world x,
+    // not z.)
+    ship.position.set(232, 0, -40);
+    scene.add(ship);
+    const dockCrane = new THREE.Group();
+    const dcMat = new THREE.MeshLambertMaterial({ color: 0xd9a83a });
+    const dcBase = new THREE.Mesh(new THREE.BoxGeometry(6, 3, 6), dcMat);
+    dcBase.position.y = 1.5;
+    dcBase.castShadow = true;
+    dockCrane.add(dcBase);
+    const dcMast = new THREE.Mesh(new THREE.BoxGeometry(2, 26, 2), dcMat);
+    dcMast.position.y = 16;
+    dcMast.castShadow = true;
+    dockCrane.add(dcMast);
+    const dcJib = new THREE.Mesh(new THREE.BoxGeometry(24, 1.6, 1.6), dcMat);
+    dcJib.position.set(-8, 28, 0);
+    dcJib.castShadow = true;
+    dockCrane.add(dcJib);
+    const dcHook = new THREE.Mesh(
+      new THREE.BoxGeometry(2.2, 2.2, 2.2),
+      new THREE.MeshLambertMaterial({ color: 0x2ea88a }),
+    );
+    dcHook.position.set(-18, 24, 0);
+    dockCrane.add(dcHook);
+    // FIX ROUND 6 (finish 2): the mast stood dead on the cover
+    // camera's sightline with its jib pointing away from the lens,
+    // so it read as a random yellow pillar, not a crane. It now
+    // stands further west with the jib swung north over the water,
+    // so the silhouette reads as a dock crane.
+    dockCrane.position.set(198, 0, -38);
+    dockCrane.rotation.y = -Math.PI / 2;
+    scene.add(dockCrane);
+  }
+  crane.add(cBox);
+  scene.add(crane);
+
   // Radio mast (downtown) with a blinking beacon.
   const mast = new THREE.Group();
   mast.position.set(-420, 0, 140);
@@ -945,6 +1061,11 @@ export function buildCity(scene, rng, game) {
     // The live game keeps them; only the cover staging hides them.
     lamps,
     lampPoles: poles,
+    // FIX ROUND 6 (finish): the palms too, for the same reason — the
+    // crown is a solid cone, and one on the cover sightline reads as a
+    // giant green pyramid. Staging hides the ones in the sightline
+    // band; the live game keeps its palms.
+    palms: { trunks, crowns, spots: palmSpots },
     groundHeightAt: (x, z) => bridge.heightAt(x, z),
     update(dt, t) {
       bridge.update(dt);

@@ -94,6 +94,13 @@ const HUDV3_CSS = `
 #hv3-scanner { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
   display: none; background: rgba(10, 14, 26, .75); border-radius: 4px; padding: 3px 12px;
   font-size: 12px; white-space: nowrap; max-width: 460px; overflow: hidden; text-overflow: ellipsis; }
+#hv3-scanner {
+  left: 12px;
+  bottom: 180px;
+  transform: none;
+  max-width: min(290px, 36vw);
+  white-space: normal;
+}
 #hv3-scanner.show { display: block; }
 #hv3-scanner b { color: #ff9a8a; letter-spacing: 2px; margin-right: 8px; }
 #hv3-banner { position: absolute; top: 96px; left: 50%; transform: translateX(-50%);

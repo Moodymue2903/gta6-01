@@ -205,14 +205,14 @@ export class PopulationDirector {
     // top of) the 16 staged peds at z +/-9..13: tourists south, a
     // skater pair north, lookouts watching the chase from both sides.
     const spots = [
-      { kind: 'tourist', x: 236, z: 15 },
-      { kind: 'tourist', x: 242, z: -15 },
-      { kind: 'tourist', x: 248, z: 15 },
-      { kind: 'skater', x: 238, z: -16 },
-      { kind: 'skater', x: 246, z: 16 },
-      { kind: 'lookout', x: 234, z: -15 },
-      { kind: 'lookout', x: 250, z: -16 },
-      { kind: 'tourist', x: 240, z: 16 },
+      { kind: 'tourist', x: 236, z: 10 },
+      { kind: 'tourist', x: 242, z: -10 },
+      { kind: 'tourist', x: 248, z: 11 },
+      { kind: 'skater',  x: 238, z: -11 },
+      { kind: 'skater',  x: 246, z: 10 },
+      { kind: 'lookout', x: 234, z: -9 },
+      { kind: 'lookout', x: 249, z: -11 },
+      { kind: 'tourist', x: 240, z: 11 },
     ];
     for (const s of spots) {
       const p = this.spawnArchetype(s.kind, s.x, s.z);

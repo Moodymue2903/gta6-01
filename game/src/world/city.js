@@ -184,6 +184,58 @@ export function buildCity(scene, rng, game) {
   eastApproach.position.set(231, 0.05, 0);
   eastApproach.receiveShadow = true;
   scene.add(eastApproach);
+  // HARBOUR FIX — quay slabs: the land model includes the two side
+  // strips, but the moving bridge leaves cover only the middle. These
+  // slabs give the side strips a visible top at y = 0 and a wall
+  // reaching below the water. The moving span stays clear.
+  const quayGeometry = new THREE.BoxGeometry(20, 1.8, 7);
+  const quayMaterial = new THREE.MeshLambertMaterial({ color: 0xb79c7b });
+
+  for (const z of [-10.5, 10.5]) {
+    const quay = new THREE.Mesh(quayGeometry, quayMaterial);
+    quay.position.set(240, -0.9, z);
+    quay.castShadow = true;
+    quay.receiveShadow = true;
+    scene.add(quay);
+  }
+  // HARBOUR FIX — moored boat: a small boat floating on the channel
+  // water just south of the quay, placed so it reads in the cover
+  // frame (the teal water strip at the frame's left edge).
+  // COORDINATES (z is SOUTH in this world): the boardwalk island
+  // covers x -70..230, z -160..160, so any boat at x < 230 sits on
+  // LAND (y=0) and its hull is buried. The only water near the quay
+  // is the channel x 230..250, z beyond +-14. First spot (222,22)
+  // was land AND occluded by VKPD-71 (a cruiser that converges onto
+  // the quay at (229.7,13.5) during the sim); second spot (208,27)
+  // was also land. This spot (231,22) is water (isLand false), in
+  // the frame at 42-50 deg left, 2-12 m south of the quay wall, and
+  // clear of every police unit. Hull sits in the water (water plane
+  // y = -1.5); the mast gives it a vertical read at 620 px. Long
+  // axis north-south so the broad side faces the west-looking
+  // cover camera.
+  const boat = new THREE.Group();
+  const boatHull = new THREE.Mesh(
+    new THREE.BoxGeometry(3, 1.2, 8),
+    new THREE.MeshLambertMaterial({ color: 0x8a5a3b }),
+  );
+  boatHull.position.y = -1.0;
+  boatHull.castShadow = true;
+  boat.add(boatHull);
+  const boatCabin = new THREE.Mesh(
+    new THREE.BoxGeometry(2, 1, 3),
+    new THREE.MeshLambertMaterial({ color: 0xf2ead8 }),
+  );
+  boatCabin.position.set(0, 0.1, -0.5);
+  boatCabin.castShadow = true;
+  boat.add(boatCabin);
+  const boatMast = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.08, 0.08, 4.5, 6),
+    new THREE.MeshLambertMaterial({ color: 0x4a3428 }),
+  );
+  boatMast.position.set(0, 2.2, 0.5);
+  boat.add(boatMast);
+  boat.position.set(231, 0, 22);
+  scene.add(boat);
   // FIX ROUND 6 — wet causeway band: the chase stretch (x 230-300)
   // is dark wet asphalt, not the tan promenade slabs, so the road
   // reads as a road and the sun glints on it read as reflections.

@@ -197,6 +197,14 @@ export function buildLighting(scene) {
     rim,
     fill,
     sky,
+    // GOLDEN-HOUR ROUND — let shot staging redirect the sun: the
+    // per-frame update() positions the sun from the closure sunDir,
+    // so a repositioned sun would be undone on the next tick unless
+    // sunDir itself is updated. applyGoldenHour (renderLook.js) calls
+    // this with the backlit direction so the update keeps it.
+    setSunDir(v) {
+      sunDir.copy(v).normalize();
+    },
     // Swap the whole light rig to a named time of day. Used by shot
     // staging only; the live game always runs golden hour.
     setTimeOfDay(name) {

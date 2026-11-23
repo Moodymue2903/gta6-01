@@ -36,15 +36,15 @@ function el(tag, id, parent, html = '') {
 
 const HUDV3_CSS = `
 #hv3-mission { position: absolute; top: 12px; left: 12px; width: 300px;
-  background: rgba(10, 14, 26, .82); border: 1.5px solid rgba(251, 191, 36, .55);
-  border-left: 4px solid #fbbf24; border-radius: 6px; padding: 8px 12px; }
+  background: linear-gradient(135deg, rgba(40, 22, 30, 0.82), rgba(70, 34, 30, 0.7)); border: 1.5px solid rgba(251, 191, 36, .55);
+  border-left: 3px solid #f2a33a; border-radius: 6px; padding: 8px 12px; }
 #hv3-mission .m-job { color: #fbbf24; font-weight: 800; letter-spacing: 1px; font-size: 13px; }
 #hv3-mission .m-obj { font-size: 19px; font-weight: 700; line-height: 1.2; margin: 2px 0; }
 #hv3-mission .m-stage { color: #9fd8dd; font-size: 13px; letter-spacing: .5px; }
 #hv3-mission .m-pips { color: #9fd8dd; font-size: 12px; letter-spacing: 3px; }
 #hv3-roster { position: absolute; top: 116px; left: 12px; width: 300px; display: none;
-  background: rgba(10, 14, 26, .82); border: 1.5px solid rgba(239, 68, 68, .45);
-  border-radius: 6px; padding: 7px 12px; }
+  background: linear-gradient(135deg, rgba(40, 22, 30, 0.82), rgba(70, 34, 30, 0.7)); border: 1.5px solid rgba(239, 68, 68, .45);
+  border-left: 3px solid #f2a33a; border-radius: 6px; padding: 7px 12px; }
 #hv3-roster.show { display: block; }
 #hv3-roster .r-head { color: #ff9a8a; font-weight: 800; letter-spacing: 1px; font-size: 12px; margin-bottom: 3px; }
 #hv3-roster .r-row { font-size: 13px; font-weight: 700; line-height: 1.5; white-space: nowrap; }
@@ -61,8 +61,8 @@ const HUDV3_CSS = `
 #hv3-wanted .w-state { font-size: 12px; letter-spacing: 2px; color: #fbbf24; font-weight: 800;
   text-shadow: 0 1px 3px rgba(0,0,0,.9); margin-top: 2px; }
 #hv3-cash { position: absolute; top: 12px; right: 12px; width: 210px; text-align: right;
-  background: rgba(10, 14, 26, .82); border: 1.5px solid rgba(255, 194, 122, .45);
-  border-radius: 6px; padding: 8px 12px; }
+  background: linear-gradient(135deg, rgba(40, 22, 30, 0.82), rgba(70, 34, 30, 0.7)); border: 1.5px solid rgba(255, 194, 122, .45);
+  border-left: 3px solid #f2a33a; border-radius: 6px; padding: 8px 12px; }
 #hv3-cash .cash { font-size: 24px; font-weight: 800; color: #ffd9a0; }
 #hv3-cash .rank { font-size: 13px; font-weight: 700; }
 #hv3-cash .rank-bar { height: 5px; background: #3a2a1a; border-radius: 3px; margin: 4px 0; overflow: hidden; }
@@ -80,13 +80,13 @@ const HUDV3_CSS = `
 #hv3-crew .cm-name { font-size: 11px; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
 #hv3-crew .cm-label { font-size: 11px; color: #7ddb8a; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
 #hv3-weapon { position: absolute; right: 12px; bottom: 92px; min-width: 150px; text-align: right;
-  background: rgba(10, 14, 26, .82); border: 1.5px solid rgba(255, 194, 122, .55);
-  border-radius: 6px; padding: 6px 12px; }
+  background: linear-gradient(135deg, rgba(40, 22, 30, 0.82), rgba(70, 34, 30, 0.7)); border: 1.5px solid rgba(255, 194, 122, .55);
+  border-left: 3px solid #f2a33a; border-radius: 6px; padding: 6px 12px; }
 #hv3-weapon b { color: #ffc27a; font-size: 15px; letter-spacing: 1px; margin-right: 8px; }
 #hv3-weapon span { color: #fff; font-size: 14px; font-weight: 700; }
 #hv3-speed { position: absolute; right: 12px; bottom: 12px; width: 210px; text-align: right;
-  background: rgba(10, 14, 26, .82); border: 1.5px solid rgba(255, 194, 122, .45);
-  border-radius: 6px; padding: 7px 12px; }
+  background: linear-gradient(135deg, rgba(40, 22, 30, 0.82), rgba(70, 34, 30, 0.7)); border: 1.5px solid rgba(255, 194, 122, .45);
+  border-left: 3px solid #f2a33a; border-radius: 6px; padding: 7px 12px; }
 #hv3-speed .spd b { font-size: 26px; font-weight: 800; }
 #hv3-speed .spd span { font-size: 13px; color: #9fd8dd; font-weight: 700; margin-left: 6px; }
 #hv3-speed .veh { font-size: 13px; font-weight: 700; }

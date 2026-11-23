@@ -1174,6 +1174,10 @@ export function buildCity(scene, rng, game) {
     // (SECOND FIX ROUND: a causeway lamp head filled the cover frame).
     // The live game keeps them; only the cover staging hides them.
     lamps,
+    // GOLDEN-HOUR ROUND (Task 3): expose the moored boat so the cover
+    // staging can set its broadside transform. The live game keeps the
+    // boat at (232, 0, 19); only the cover staging rotates/scales it.
+    boat,
     lampPoles: poles,
     // FIX ROUND 6 (finish): the palms too, for the same reason — the
     // crown is a solid cone, and one on the cover sightline reads as a

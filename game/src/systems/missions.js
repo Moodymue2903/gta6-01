@@ -115,12 +115,22 @@ export class MissionSystem {
     this.game = game;
     this.active = null; // {def, stage, timer, totalTimer, data}
     this.completed = new Set();
-    // 3D objective beacon: a pulsing additive cylinder.
+    // 3D objective beacon: a gold column (NormalBlending, not additive —
+    // the additive cylinder read WHITE in daylight/golden hour). Saturated
+    // gold core, toneMapped false so the gold stays saturated in the
+    // golden-hour light; a darker rim cylinder as a child so it follows
+    // the beacon's position/visibility/scale automatically.
     const geo = new THREE.CylinderGeometry(2.2, 2.2, 26, 12, 1, true);
     this.beacon = new THREE.Mesh(
       geo,
-      new THREE.MeshBasicMaterial({ color: 0xffc27a, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+      new THREE.MeshBasicMaterial({ color: 0xffc21a, transparent: true, opacity: 0.35, blending: THREE.NormalBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }),
     );
+    const rimGeo = new THREE.CylinderGeometry(2.6, 2.6, 26, 12, 1, true);
+    const rim = new THREE.Mesh(
+      rimGeo,
+      new THREE.MeshBasicMaterial({ color: 0x8a5a10, transparent: true, opacity: 0.35, blending: THREE.NormalBlending, depthWrite: false, side: THREE.DoubleSide, toneMapped: false }),
+    );
+    this.beacon.add(rim);
     this.beacon.visible = false;
     game.scene.add(this.beacon);
     this.marker = new THREE.Mesh(

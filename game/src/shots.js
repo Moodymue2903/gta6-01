@@ -61,7 +61,7 @@ import { Car } from './entities/vehicle.js';
 import { stageRun, completeJob, dumpState } from './world/shotDirector.js';
 import { stageYardDensity, stagePursuitCrowd } from './world/density_spawner.js';
 import { applyMidday, applyGolden } from './world/skyAndLight.js';
-import { applyDayHaze } from './look/renderLook.js';
+import { applyGoldenHour, createCoolLight, followCool } from './look/renderLook.js';
 import { tintedGlassMaterial } from './world/vehicleMaterials.js';
 import { fireProfileShot } from './systems/combat/tracers.js';
 // FIX ROUND 8 (Builder B) — sunset atmosphere retune + cinematic
@@ -165,6 +165,91 @@ const MAP_MARKET = [115, 125];
 // the safehouse/garage markers and the player arrow. No new map
 // renderer — the base is the existing baked tile, the overlays use
 // the same data and colours as the career map and the HUD minimap.
+// STEP 5 (render fix) — city fabric inside the existing rectangles.
+// Keeps island footprints from data but changes how they read: a sand
+// beach band, a warm land base, and block infill, so the islands read
+// as a city with streets and blocks instead of flat rectangles. Drawn
+// BEFORE the road strokes (so roads stay on top) and before the
+// shoreline stroke (so the coast stays legible). The beach band is a
+// rendering effect, not new geography.
+const FABRIC_PALETTE = ['#e8c9a0', '#d9a77a', '#f0dcb8', '#c98b5c', '#e3b98a', '#b9775a'];
+
+// Deterministic PRNG (mulberry32) so the map is identical every capture.
+function seeded(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Multiply a hex colour by k (k>1 brightens, k<1 darkens), clamped.
+function shade(hex, k) {
+  const n = parseInt(hex.slice(1), 16);
+  const r = Math.min(255, Math.max(0, Math.round(((n >> 16) & 255) * k)));
+  const g = Math.min(255, Math.max(0, Math.round(((n >> 8) & 255) * k)));
+  const b = Math.min(255, Math.max(0, Math.round((n & 255) * k)));
+  return 'rgb(' + r + ',' + g + ',' + b + ')';
+}
+
+// Rounded-rect path (manual arcs — headless Chromium may lack ctx.roundRect).
+function rr(ctx, x, y, w, h, r) {
+  const rad = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rad, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rad);
+  ctx.arcTo(x + w, y + h, x, y + h, rad);
+  ctx.arcTo(x, y + h, x, y, rad);
+  ctx.arcTo(x, y, x + w, y, rad);
+  ctx.closePath();
+}
+
+function drawCityFabric(ctx, x, y, w, h, seed) {
+  const rnd = seeded(seed);
+  const cell = 36;
+  const gap = 8;
+  // Sand beach band around the island.
+  ctx.fillStyle = '#efdcae';
+  rr(ctx, x - 12, y - 12, w + 24, h + 24, 22);
+  ctx.fill();
+  // Warm land base.
+  ctx.fillStyle = '#c9a46a';
+  rr(ctx, x, y, w, h, 14);
+  ctx.fill();
+  // Block infill: a cell grid; skip ~12% for plazas/courtyards.
+  for (let by = y + gap; by + cell - gap <= y + h - gap; by += cell) {
+    for (let bx = x + gap; bx + cell - gap <= x + w - gap; bx += cell) {
+      if (rnd() < 0.12) continue;
+      const base = FABRIC_PALETTE[Math.floor(rnd() * FABRIC_PALETTE.length)];
+      const bw = cell - gap - rnd() * 6;
+      const bh = cell - gap - rnd() * 6;
+      // South-edge shadow, then the block, then a top highlight.
+      ctx.fillStyle = 'rgba(70,35,15,0.28)';
+      ctx.fillRect(bx + 2, by + bh + 1, bw, 4);
+      ctx.fillStyle = shade(base, 0.86 + rnd() * 0.28);
+      ctx.fillRect(bx, by, bw, bh);
+      ctx.fillStyle = shade(base, 1.12);
+      ctx.fillRect(bx, by, bw, 3);
+    }
+  }
+  // Palm dots along the beach (deterministic, seeded).
+  ctx.fillStyle = '#4f8a3a';
+  const per = 2 * (w + h);
+  for (let i = 0; i < 14; i++) {
+    const d = rnd() * per;
+    let px, py;
+    if (d < w) { px = x + d; py = y - 6; }
+    else if (d < w + h) { px = x + w + 6; py = y + (d - w); }
+    else if (d < 2 * w + h) { px = x + (2 * w + h - d); py = y + h + 6; }
+    else { px = x - 6; py = y + (per - d); }
+    ctx.beginPath();
+    ctx.arc(px, py, 3, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
 function drawFullMap(canvas, game) {
   const ctx = canvas.getContext('2d');
   const W = canvas.width;
@@ -188,6 +273,13 @@ function drawFullMap(canvas, game) {
     worldW * b.scale, worldH * b.scale,
     X(minX), Z(minZ), worldW * scale, worldH * scale,
   );
+  // City fabric (STEP 5, render fix): sand band, warm land base and
+  // block infill inside each island rect, drawn BEFORE the shoreline
+  // stroke and the road strokes so both stay on top. Same island
+  // footprints as the data — no new geography.
+  islandRects().forEach((isl, i) => {
+    drawCityFabric(ctx, X(isl[0]), Z(isl[1]), (isl[2] - isl[0]) * scale, (isl[3] - isl[1]) * scale, 7 + i);
+  });
   // Shorelines (round 3): the baked tile strokes each island rect once
   // and the coast still reads as a flat rectangle edge. A second, bold
   // bright stroke on top of the tile makes the three coasts read as
@@ -385,18 +477,19 @@ export function stageShot(kind, game) {
     // of it. The drive loop below only advances the world (traffic,
     // fleeing peds, converging units, the 17:59 clock); the hero pose
     // is frozen explicitly after it, grounded on the bridge deck.
-    // DAYLIGHT COVER (2026-11-23, Codex verdict 4 — the direct C4 fix):
-    // the judges keep choosing sun-soaked tropical over our sunset, so
-    // the cover switches from golden-hour dusk to DAY. applyMidday is
-    // the Master Guide §6 day variant (bg #a6d6ee, FogExp2 #b9d2d8,
-    // Hemi 1.7, Dir #fff1d6 3.0) — the same call the pursuit branch
-    // uses. No sunset atmosphere: the sky is bright blue, the water
-    // is bright teal, and the coast reads.
-    // RENDER-FIX ROUND (Step 1) — warm haze over the day look: the
-    // fog goes warm tan and denser, so distant buildings melt into
-    // warm light instead of pale blue.
-    applyMidday(g);
-    applyDayHaze(g.scene);
+    // GOLDEN-HOUR COVER (2026-11-23, deliberate override of the C4
+    // 1-3 result): the judges named a specific lighting setup — warm
+    // sunset light, backlit palms, soft haze, glowing vehicle lights.
+    // That is a time-of-day change, not a colour grade, and it is
+    // codeable. The cover switches from midday back to golden hour.
+    // setTimeOfDay('golden') restores the golden clock (17:59, the
+    // verify's expected value) and the golden sunDir; applyGoldenHour
+    // (renderLook.js, called after the camera pose below) then
+    // applies the GOLDEN preset — backlit sun, warm fog, stronger
+    // bloom, retuned sky dome. The old midday cover (Codex verdict 4)
+    // lost C4 4-0 in re-test 11; the grade alone lost 1-3 in the
+    // C4-only test. This is the time-of-day lever, not the grade.
+    g.lighting.setTimeOfDay('golden');
     const { runCar } = stageRun(g);
     g.missions.start(8);
     // 5 stars, 8 units + heli: the full pursuit on the chase.
@@ -740,6 +833,40 @@ export function stageShot(kind, game) {
     // Apply the pose NOW so the overlap check below projects against
     // the real camera (the combat branch does the same).
     g.cameraCtl.update(0, g.input);
+    // GOLDEN-HOUR ROUND — apply the GOLDEN preset now that the camera
+    // is posed (the backlit sun position is computed from the camera
+    // direction, so it must run after the pose). Refs: sun/hemi/sky
+    // from the light rig, bloom/grade from the composer (stashed on
+    // userData by createComposer), setSunDir so the per-frame
+    // lighting.update keeps the backlit direction. Shadows stay off.
+    applyGoldenHour({
+      renderer: g.renderer,
+      scene: g.scene,
+      sun: g.lighting.sun,
+      hemi: g.lighting.hemi,
+      bloom: g.composer ? g.composer.userData.bloom : null,
+      grade: g.composer ? g.composer.userData.grade : null,
+      sky: g.lighting.sky,
+      setSunDir: (v) => g.lighting.setSunDir(v),
+    }, g.camera, runCar.pos);
+    // GOLDEN-HOUR ROUND (Task 3) — boat broadside, cover branch ONLY.
+    // The proposed (228.3, 13.5) is LAND (boardwalk island covers
+    // x -70..230), so the fallback applies: original (232, 19),
+    // rotY 1.09 puts the hull perpendicular to the view line (the
+    // view runs ~27 deg from the hull's long axis), scale 1.2.
+    // The live game keeps the boat at (232, 0, 19) unrotated.
+    if (g.city.boat) {
+      const BOAT = { x: 232, z: 19, rotY: 1.09, scale: 1.2 };
+      g.city.boat.position.x = BOAT.x;
+      g.city.boat.position.z = BOAT.z;
+      g.city.boat.rotation.y = BOAT.rotY;
+      g.city.boat.scale.setScalar(BOAT.scale);
+    }
+    // COOL COUNTER-ACCENT (user update 2026-11-23 ~23:39 IST) — a
+    // cool teal light from the camera side, opposite the warm sun,
+    // so the frame is not one hue. Positioned from the camera pose,
+    // so it tracks the cover camera.
+    followCool(createCoolLight(g.scene), g.camera, runCar.pos);
     // FIX ROUND 7 — screen-space overlap check (plan requirement):
     // the hero must not overlap any police unit by more than 10% of
     // its own box. Stored on window for the verifier.

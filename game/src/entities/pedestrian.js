@@ -26,6 +26,9 @@ import { createCharacter } from '../look/characterRig.js';
 
 const COUNT = 35;
 const SHIRTS = [0xe84a3a, 0x3a7ad9, 0xe8c93a, 0x2ea88a, 0xd97bd9, 0xe8e8e8, 0x222226, 0xd97b2e, 0x8a6a3a];
+// STEP 4 (render fix) — hat colours; null means no hat, so about half
+// the walkers wear one. Warm, saturated tones that read in golden hour.
+const HATS = [null, 0x8a5a2a, 0x3a5a8a, 0xc9a86a, null, 0x5a3a2a, 0x2a5a3a];
 
 function makePedMesh(shirt, opts = {}) {
   const g = new THREE.Group();
@@ -82,7 +85,7 @@ export class Pedestrians {
   }
 
   spawn(rng, x, z) {
-    const mesh = createCharacter({ bodyType: 'ped', clothing: { shirt: choice(rng, SHIRTS) } });
+    const mesh = createCharacter({ bodyType: 'ped', clothing: { shirt: choice(rng, SHIRTS) }, hat: choice(rng, HATS) });
     this.game.scene.add(mesh);
     return {
       mesh,

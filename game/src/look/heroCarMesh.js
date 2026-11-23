@@ -32,17 +32,25 @@ const INTERIOR_MAT = new THREE.MeshStandardMaterial({ color: 0x14161c, roughness
 const GLASS_MAT = new THREE.MeshStandardMaterial({
   // RENDER-FIX ROUND (rear-view fix) — dark glass: the pale look came
   // from metalness 0.3 + envMapIntensity 1.8 with a bright environment
-  // map. Near-black colour, no metalness, low env intensity. The
-  // transparent/opacity/DoubleSide are kept from the old material
-  // (the user's spec addresses paleness, not sidedness or
-  // see-through): the greenhouse loft still reads as tinted glass
-  // with the dark interior behind it, just much darker.
+  // map. Near-black colour, no metalness, low env intensity.
+  // GOLDEN-HOUR ROUND (Task 2) — the 2a diagnostic PROVED the
+  // material was right but the pixels were wrong: the magenta test
+  // turned the rear window magenta, so the glass IS the mesh. The
+  // cream came from TRANSMISSION, not reflection: the glass was
+  // transparent (opacity 0.82), so the bright golden sky showed
+  // straight through the rear glass (and the front glass behind it)
+  // and read as pale cream (216,210,188). Changing envMapIntensity
+  // 1.8 -> 0.35 changed nothing because the reflection was never the
+  // cause. Fix: make the glass OPAQUE (transparent false, opacity 1)
+  // so it renders as a solid dark band and blocks the sky. The
+  // colour/metalness/roughness/envMapIntensity stay as specified
+  // (0x05090c / 0 / 0.05 / 0.35); DoubleSide is kept.
   color: 0x05090c, roughness: 0.05, metalness: 0.0, envMapIntensity: 0.35,
-  transparent: true, opacity: 0.82, side: THREE.DoubleSide,
+  transparent: false, opacity: 1, side: THREE.DoubleSide,
 });
 const HALO_MAT = new THREE.MeshBasicMaterial({ color: 0xfff6d8 });
 const LENS_MAT = new THREE.MeshBasicMaterial({ color: 0xfff2b0 });
-const STRIPE_MAT = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.35, metalness: 0.1 });
+const STRIPE_MAT = new THREE.MeshStandardMaterial({ color: 0xf5e6c8, roughness: 0.6, metalness: 0.1 });
 
 function paintMat(color) {
   return new THREE.MeshPhysicalMaterial({

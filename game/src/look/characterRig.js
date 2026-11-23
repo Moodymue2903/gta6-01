@@ -121,6 +121,19 @@ function buildHead(joints, opts, skinMat, hairMat) {
     quiff.scale.set(1.3, 0.6, 1.0);
     head.add(quiff);
   }
+  // STEP 4 (render fix) — hat, when opts.hat carries a colour: a brim
+  // plus a low crown. Hats break the identical-head silhouette and
+  // give pedestrians a readable top line at screenshot size. Only
+  // peds get them (the spawner passes a hat colour for about half).
+  if (opts.hat) {
+    const hatMat = std(opts.hat, 0.85);
+    const brim = mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.02, 12), hatMat, 0, 0.2, 0);
+    brim.castShadow = false;
+    head.add(brim);
+    const crown = mesh(new THREE.CylinderGeometry(0.11, 0.13, 0.09, 10), hatMat, 0, 0.25, 0);
+    crown.castShadow = false;
+    head.add(crown);
+  }
   // Sunglasses (player / guards); eyes + brows + nose + mouth for all.
   if (opts.sunglasses) {
     const shades = mesh(new THREE.BoxGeometry(0.19, 0.045, 0.03), std(0x0c0e12, 0.15, 0.4), 0, 0.13, 0.105);
@@ -173,14 +186,18 @@ export function createCharacter(opts = {}) {
   J.pelvis = new THREE.Group();
   J.pelvis.position.y = 0.88;
   root.add(J.pelvis);
-  const pelvisMesh = mesh(new THREE.CapsuleGeometry(0.16, 0.12, 4, 10), pantsMat, 0, 0, 0);
+  const pelvisMesh = mesh(new THREE.CylinderGeometry(0.16, 0.17, 0.28, 8), pantsMat, 0, 0, 0);
   pelvisMesh.scale.set(1.25, 0.8, 0.85);
   J.pelvis.add(pelvisMesh);
 
   J.torso = new THREE.Group();
   J.torso.position.y = 0.06;
   J.pelvis.add(J.torso);
-  const torsoMesh = mesh(new THREE.CapsuleGeometry(0.19, 0.38, 8, 16), shirtMat, 0, 0.26, 0);
+  // STEP 4 (render fix) — tapered torso, NOT a capsule: wider at the
+  // shoulders (0.2) than the hips (0.15), so the figure reads as a
+  // person with shoulders, not a single tube. The judges called the
+  // pedestrians "capsule-like"; the capsule is what made them read so.
+  const torsoMesh = mesh(new THREE.CylinderGeometry(0.2, 0.15, 0.6, 8), shirtMat, 0, 0.26, 0);
   torsoMesh.scale.set(1.15, 1.0, 0.72);
   J.torso.add(torsoMesh);
   // Tactical vest (player/police/guard) or open jacket (pedestrians).
@@ -208,6 +225,7 @@ export function createCharacter(opts = {}) {
     sunglasses: bodyType === 'player' || bodyType === 'guard',
     bandana: bodyType === 'guard',
     hairStyle: opts.hairStyle,
+    hat: opts.hat,
   }, skinMat, hairMat);
 
   // Arms: shoulder joint -> upper arm -> elbow joint -> forearm -> hand.

@@ -25,11 +25,14 @@ export function placeProps(scene) {
   const colliders = [];
 
   // Fruit stands: counter + striped awning + bright fruit boxes.
-  // Two by the night market, one on the boardwalk, one at the docks.
+  // Three along the boardwalk behind the market row (z=132), one at
+  // the docks. REV2 2026-11-23: the (120,112) stand sat on Ocean
+  // Drive's eastbound lane and read as a floating table next to the
+  // hero car, so it moved to (100,132) behind the stall row.
   const standSpots = [
     { x: 66, z: 132, c: 0xff6a4a },
     { x: 144, z: 132, c: 0x2ea88a },
-    { x: 120, z: 112, c: 0xe8c93a },
+    { x: 100, z: 132, c: 0xe8c93a },
     { x: 330, z: -150, c: 0xd95a8a },
   ];
   const fruitCols = [0xff6a4a, 0xe8c93a, 0x2ea88a, 0xd95a8a, 0xff9a3a];
@@ -40,7 +43,18 @@ export function placeProps(scene) {
     );
     counter.position.set(s.x, 0.5, s.z);
     counter.castShadow = true;
+    counter.receiveShadow = true;
     scene.add(counter);
+    // REV2: low plinth under the counter so the stand reads as sitting
+    // ON the ground, not floating above it. Fixed size, no rng draws.
+    const plinth = new THREE.Mesh(
+      new THREE.BoxGeometry(2.9, 0.15, 1.7),
+      new THREE.MeshLambertMaterial({ color: 0x4a3428 }),
+    );
+    plinth.position.set(s.x, 0.075, s.z);
+    plinth.castShadow = true;
+    plinth.receiveShadow = true;
+    scene.add(plinth);
     for (let j = 0; j < 5; j++) {
       const fruit = new THREE.Mesh(
         new THREE.BoxGeometry(0.4, 0.3, 0.4),
@@ -48,6 +62,17 @@ export function placeProps(scene) {
       );
       fruit.position.set(s.x - 0.9 + j * 0.45, 1.15, s.z + (rng() - 0.5) * 0.5);
       scene.add(fruit);
+    }
+    // REV2: four posts under the awning (same pattern as the city.js
+    // market stalls, scaled to this awning at y=2.5: posts 2.5 tall,
+    // centred y=1.25, at the counter/awning corners). Fixed values,
+    // no rng draws, so the crate/sign/bin streams after this loop
+    // do not shift.
+    const postMat = new THREE.MeshLambertMaterial({ color: 0x3a2a2a });
+    for (const [ox, oz] of [[-1.3, -0.7], [1.3, -0.7], [-1.3, 0.7], [1.3, 0.7]]) {
+      const post = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 2.5, 5), postMat);
+      post.position.set(s.x + ox, 1.25, s.z + oz);
+      scene.add(post);
     }
     const awn = new THREE.Mesh(
       new THREE.BoxGeometry(3.0, 0.1, 1.9),

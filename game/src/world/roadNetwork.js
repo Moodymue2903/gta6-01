@@ -137,16 +137,18 @@ export const GRAPH = buildGraph();
 //     with the drawbridge down AND up (bridge span x 232..252 never
 //     overlaps the route, x <= 140). All legs are on land.
 //   * the last leg (120,110) -> (120,125) has NO graph edge: it is a
-//     15 m crossing of open plaza ground, not a road. Its straight line
-//     is BLOCKED for a car: the fruit stand at (120,112) sits dead on
-//     the x=120 line (collider 118.6..121.4 x 111.2..112.8) and market
-//     stall #6 sits on the destination itself (120,125 is inside its
-//     collider 118.5..121.5 x 124.1..125.9). Both branches therefore
+//     15 m crossing of open plaza ground, not a road. REV2 2026-11-23:
+//     the fruit stand that used to sit dead on the x=120 line at
+//     (120,112) moved to (100,132) behind the market row, so the
+//     straight line is clear now; only market stall #6 still sits on
+//     the destination itself (120,125 is inside its collider
+//     118.5..121.5 x 124.1..125.9). Both branches therefore still
 //     finish through the verified-clear gap at x=115 (stalls at x=110
 //     and x=120 leave a 7 m gap; (115,125) is clear for r=2.5).
-//   * (120,110) itself is within car radius (2.5 m) of the fruit stand,
-//     so it is a pass-through turn point, never a reset target for a
-//     car; nearestRouteWaypoint() skips it for cars (clear on foot).
+//   * (120,110) is clear of every stand now (nearest stand is the
+//     relocated one at (100,132), ~29.7 m away), so it is a valid
+//     waypoint for cars as well as on foot; nearestRouteWaypoint()
+//     no longer skips it.
 //   * the shared first leg is NOT clean lane-following: the building at
 //     (72.1,-18.7) puts its collider (x0 61.4) across the northbound
 //     lane x=62.2 for z -29.8..-7.6 (centre-inside trap), and the

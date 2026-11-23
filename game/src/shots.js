@@ -524,14 +524,12 @@ export function stageShot(kind, game) {
     // Hero: the run car, grounded on Ocean Drive at (80,108), eastbound.
     // Heading +PI/2 is east in this codebase (the 'drive' branch's
     // -PI/2 drives west); forwardOf(+PI/2) = (1, 0, 0).
-    // NORTH SIDE (z=108, the westbound lane): a fruit stand sits at
-    // (120,112), collider [118.6,111.2]-[121.4,112.8], directly on the
-    // eastbound lane (z=112.2) — the centreline run (z=110) threads it
-    // by 0.2 m and the game's 2.5 m car radius clips its corner, so the
-    // staged drive would hit it. At z=108 the stand clears by ~2.2 m
-    // edge-to-edge (3.3 m centre-to-corner, outside the 2.5 m radius),
-    // and the wrong-way eastbound run in the westbound lane reads as a
-    // getaway threading past the stand. The freeze stays at x=118.
+    // NORTH SIDE (z=108, the westbound lane): REV2 2026-11-23 — the
+    // fruit stand that used to sit at (120,112) on the eastbound lane
+    // moved to (100,132) behind the market row, so z=108 is simply
+    // clear now: no stand to thread past. The wrong-way eastbound run
+    // in the westbound lane still reads as a getaway, and the freeze
+    // stays at x=118.
     runCar.pos.set(80, 0, 108);
     runCar.heading = Math.PI / 2;
     runCar.speed = 30;
@@ -551,8 +549,9 @@ export function stageShot(kind, game) {
     g.scriptedDrive = null;
     // Freeze the hero GROUNDED on Ocean Drive at (118, 0, 108): y = 0 is
     // the flat road surface (the wheels' bottoms sit exactly at pos.y),
-    // pitch 0, airborne false, vy 0. North side (z=108), clear of the
-    // fruit stand at (120,112) — see the staging note above. Heading
+    // pitch 0, airborne false, vy 0. North side (z=108); the road ahead
+    // is clear (REV2: the fruit stand moved off the lane to (100,132)).
+    // Heading
     // keeps the slight drift angle toward the camera side (north), so
     // the front quarter and the north flank read to the rear chase
     // camera — the mirror of the cover's -PI/2+0.35 drift. If the loop
@@ -611,8 +610,8 @@ export function stageShot(kind, game) {
     // ~50 deg across the road, travelling ESE — so the rear chase
     // camera sees the cruiser's LEFT flank + roof light bar side-on,
     // not its nose. 11 m ahead of the hero, clear of the 7 m
-    // de-conflict keep-out, of the fruit stand at (120,112), and of
-    // the camera. lightBarSteady keeps both pods bright in the
+    // de-conflict keep-out (REV2: the keep-out no longer includes the
+    // fruit stand — it moved to (100,132)) and of the camera. lightBarSteady keeps both pods bright in the
     // frozen still (police.js skips the 3 Hz flash for this unit).
     const interceptor = new Car(g, 'sedan', 0xf2f2f2, 129, 110, 0.70, true);
     interceptor.unit = { name: 'VKPD-12', state: 'pursue', kind: 'cruiser', blockTarget: null, ramCooldown: 0, lightBarSteady: true };

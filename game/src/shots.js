@@ -61,6 +61,7 @@ import { Car } from './entities/vehicle.js';
 import { stageRun, completeJob, dumpState } from './world/shotDirector.js';
 import { stageYardDensity, stagePursuitCrowd } from './world/density_spawner.js';
 import { applyMidday, applyGolden } from './world/skyAndLight.js';
+import { applyDayHaze } from './look/renderLook.js';
 import { tintedGlassMaterial } from './world/vehicleMaterials.js';
 import { fireProfileShot } from './systems/combat/tracers.js';
 // FIX ROUND 8 (Builder B) — sunset atmosphere retune + cinematic
@@ -391,7 +392,11 @@ export function stageShot(kind, game) {
     // Hemi 1.7, Dir #fff1d6 3.0) — the same call the pursuit branch
     // uses. No sunset atmosphere: the sky is bright blue, the water
     // is bright teal, and the coast reads.
+    // RENDER-FIX ROUND (Step 1) — warm haze over the day look: the
+    // fog goes warm tan and denser, so distant buildings melt into
+    // warm light instead of pale blue.
     applyMidday(g);
+    applyDayHaze(g.scene);
     const { runCar } = stageRun(g);
     g.missions.start(8);
     // 5 stars, 8 units + heli: the full pursuit on the chase.

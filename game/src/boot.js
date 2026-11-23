@@ -32,6 +32,7 @@ import { buildWaterSurface } from './world/waterSurface.js';
 // FIX ROUND 8 (Builder B) — sunset atmosphere + wet causeway +
 // harbour skyline. Minimal additive hooks: one import + one call each.
 import { installAtmosphere } from './look/sunsetAtmosphere.js';
+import { createComposer, applyShadowFlag } from './look/renderLook.js';
 import { buildWetCauseway } from './look/wetCauseway.js';
 import { buildHarborSkyline } from './look/harborSkyline.js';
 import { HUD } from './ui/hudV3.js';
@@ -76,10 +77,36 @@ class Game {
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2500);
 
+    // RENDER-FIX ROUND (Step 1) — EffectComposer post chain (grade +
+    // subtle bloom + OutputPass). Falls back to plain renderer.render
+    // if the composer cannot be built, so the game never breaks on a
+    // post-processing import.
+    this.composer = null;
+    try {
+      this.composer = createComposer(this.renderer, this.scene, this.camera);
+      // The composer renders the scene into a target, then runs the
+      // post passes — each internal render would auto-reset
+      // renderer.info, so the scene's draw calls would read as ~1
+      // (the final fullscreen quad). Disable auto-reset and reset
+      // manually per frame in render(), so info.render.calls still
+      // measures the whole frame (scene + ~12 post calls) and the
+      // verifier's draw-call readout stays meaningful.
+      this.renderer.info.autoReset = false;
+    } catch (e) {
+      console.warn('[renderLook] composer unavailable, plain render: ' + e.message);
+    }
+
     this.lighting = buildLighting(this.scene);
     // FIX ROUND 8 (Builder B): sunset atmosphere owns the envMap +
     // light rig (PMREM once at boot, low sun, 4-stop sky, FogExp2).
     this.atmosphere = installAtmosphere(this.scene, this.renderer, this.lighting);
+    // RENDER-FIX ROUND (Step 1) — shadows OFF by flag (renderLook.js
+    // SUN_SHADOWS=false): the matrix proved the shadow pass, not the
+    // composer, costs ~2,052 calls/frame. Applied after installAtmos-
+    // phere (the last lighting setup step) so nothing re-enables them;
+    // the hero blob shadow carries the grounding. Flip the flag back
+    // only with the tight followSun frustum (half=60).
+    applyShadowFlag(this.scene);
     this.city = buildCity(this.scene, this.rng, this);
     // FIX ROUND 7 — harbour identity: copper tidal gate, royal palms,
     // animated water. Built right after the city so the landmarks sit
@@ -172,9 +199,21 @@ class Game {
       this.camera.aspect = window.innerWidth / window.innerHeight;
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(window.innerWidth, window.innerHeight);
+      if (this.composer) this.composer.setSize(window.innerWidth, window.innerHeight);
     });
     window.addEventListener('pointerdown', () => this.audio.init(), { once: true });
     window.addEventListener('keydown', () => this.audio.resume(), { once: true });
+  }
+
+    // RENDER-FIX ROUND (Step 1) — one render entry point: the composer
+  // when it exists, plain renderer.render otherwise. With the
+  // composer, reset the render info first so it measures the whole
+  // frame (scene + post passes), not just the final quad.
+  render() {
+    if (this.composer) {
+      this.renderer.info.reset();
+      this.composer.render();
+    } else this.renderer.render(this.scene, this.camera);
   }
 
   // One fixed sim step. Drive input comes from the scripted override
@@ -437,7 +476,7 @@ if (game.shotKind) {
   game.state = 'shot';
   stageShot(game.shotKind, game);
   game.cameraCtl.update(0, game.input);
-  game.renderer.render(game.scene, game.camera);
+  game.render();
 } else {
   game.menus.showTitle();
 }
@@ -464,7 +503,7 @@ function frame(now) {
   }
   game.cameraCtl.update(dt, game.input);
   game.hud.update(dt);
-  game.renderer.render(game.scene, game.camera);
+  game.render();
   game.input.endFrame();
 }
 requestAnimationFrame(frame);

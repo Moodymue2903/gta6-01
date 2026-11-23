@@ -29,9 +29,16 @@ const DARK_BARREL = new THREE.MeshStandardMaterial({ color: 0x2a2d33, metalness:
 const SPOKE_MAT = new THREE.MeshStandardMaterial({ color: 0x9aa0a8, metalness: 0.9, roughness: 0.35, envMapIntensity: 1.0 });
 const CALIPER_MAT = new THREE.MeshStandardMaterial({ color: 0xc02020, roughness: 0.4, metalness: 0.4 });
 const INTERIOR_MAT = new THREE.MeshStandardMaterial({ color: 0x14161c, roughness: 0.9, metalness: 0.0 });
-const GLASS_MAT = new THREE.MeshPhysicalMaterial({
-  color: 0x1e3a52, metalness: 0.3, roughness: 0.08, transparent: true,
-  opacity: 0.82, side: THREE.DoubleSide, envMapIntensity: 1.8,
+const GLASS_MAT = new THREE.MeshStandardMaterial({
+  // RENDER-FIX ROUND (rear-view fix) — dark glass: the pale look came
+  // from metalness 0.3 + envMapIntensity 1.8 with a bright environment
+  // map. Near-black colour, no metalness, low env intensity. The
+  // transparent/opacity/DoubleSide are kept from the old material
+  // (the user's spec addresses paleness, not sidedness or
+  // see-through): the greenhouse loft still reads as tinted glass
+  // with the dark interior behind it, just much darker.
+  color: 0x05090c, roughness: 0.05, metalness: 0.0, envMapIntensity: 0.35,
+  transparent: true, opacity: 0.82, side: THREE.DoubleSide,
 });
 const HALO_MAT = new THREE.MeshBasicMaterial({ color: 0xfff6d8 });
 const LENS_MAT = new THREE.MeshBasicMaterial({ color: 0xfff2b0 });
@@ -209,6 +216,34 @@ function buildWheel(side) {
   const caliper = mesh(new THREE.BoxGeometry(0.06, 0.1, 0.05), CALIPER_MAT);
   caliper.position.set(0.1, 0.1, side * 0.1);
   return { spin, caliper };
+}
+
+// RENDER-FIX ROUND (rear-view fix) — crisp contact patches: four
+// dark quads under the tyre contacts, a hard anchor where the hero
+// blob is soft. Four extra draw calls. No castShadow (shadows stay
+// off). Positions measured from the REAL wheel centres in
+// buildHeroCar: axles at x = +/-L*0.32, sides at z = +/-W/2
+// (local +X = nose, +Z = car's right). The plan's
+// PlaneGeometry(0.42, 0.7) is adapted to this car's axis convention:
+// the quad's long side (0.7) runs along the car (X), short side
+// (0.42) across it (Z). renderOrder 6 draws the patches above the
+// hero blob (renderOrder 5) so the crisp quads read on top of the
+// soft ellipse. y = 0.015 sits above the road (tyre bottom ~0) and
+// below the blob (0.06), so there is no z-fighting.
+export function addContactPatches(car, L, W) {
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0x000000, transparent: true, opacity: 0.8, depthWrite: false,
+  });
+  const geo = new THREE.PlaneGeometry(0.7, 0.42);
+  for (const s of [-1, 1]) {
+    for (const x of [-L * 0.32, L * 0.32]) {
+      const p = new THREE.Mesh(geo, mat);
+      p.rotation.x = -Math.PI / 2;
+      p.position.set(x, 0.015, s * (W / 2));
+      p.renderOrder = 6;
+      car.add(p);
+    }
+  }
 }
 
 export function buildHeroCar(cls, color, police = false) {
@@ -433,6 +468,10 @@ export function buildHeroCar(cls, color, police = false) {
       g.add(well);
     }
   }
+
+  // RENDER-FIX ROUND — crisp contact patches under the four tyres
+  // (cars only: a bike has two centred wheels, not four corners).
+  if (cls !== 'bike') addContactPatches(g, L, W);
 
   // Rear (most visible part of the cover): recessed black valance,
   // 6 LED taillight bars, VK-773 plate, twin chrome exhausts.

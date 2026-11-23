@@ -174,9 +174,27 @@ class Game {
     // the far leaf/road while the car is above the gap, so the height
     // reads as a jump instead of flight. Opacity fades with height.
     // FIX ROUND 2 (user feedback: the car read as flying, not leaping).
+    // RENDER-FIX ROUND (rear-view fix) — darker blob: a radial-
+    // gradient texture so the centre is dense and the edge falls off
+    // fast. This is the plan's addBlobShadow gradient (0: 0.9, 0.5:
+    // 0.45, 1: 0); the blob itself lives here in boot.js, not in
+    // renderLook.js. The per-frame material.opacity still scales the
+    // whole gradient (0.25 in shots, 0.18-0.55 live), so the centre
+    // reads denser than the edge at any opacity. The old flat ellipse
+    // had a hard 0.25 cutoff at its rim; the gradient removes it.
+    const blobCanvas = document.createElement('canvas');
+    blobCanvas.width = blobCanvas.height = 128;
+    const blobCtx = blobCanvas.getContext('2d');
+    const blobGrad = blobCtx.createRadialGradient(64, 64, 4, 64, 64, 64);
+    blobGrad.addColorStop(0, 'rgba(0,0,0,0.9)');
+    blobGrad.addColorStop(0.5, 'rgba(0,0,0,0.45)');
+    blobGrad.addColorStop(1, 'rgba(0,0,0,0)');
+    blobCtx.fillStyle = blobGrad;
+    blobCtx.fillRect(0, 0, 128, 128);
+    const blobTex = new THREE.CanvasTexture(blobCanvas);
     this.heroBlob = new THREE.Mesh(
       new THREE.CircleGeometry(1, 20),
-      new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0, depthWrite: false }),
+      new THREE.MeshBasicMaterial({ map: blobTex, color: 0x000000, transparent: true, opacity: 0, depthWrite: false }),
     );
     this.heroBlob.rotation.x = -Math.PI / 2;
     // Draw after the heli's searchlight pool (renderOrder 1-2): the pool

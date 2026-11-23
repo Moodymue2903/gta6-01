@@ -235,8 +235,15 @@ export function stageShot(kind, game) {
     chaser.unit = { name: 'INTERCEPTOR', state: 'pursue', kind: 'cruiser', blockTarget: null, ramCooldown: 0 };
     chaser.speed = 40;
     g.police.units.push(chaser);
-    const oncoming = new Car(g, 'sedan', 0xf2f2f2, 228, 2.5, Math.PI / 2, true);
-    oncoming.unit = { name: 'VKPD-07', state: 'pursue', kind: 'cruiser', blockTarget: null, ramCooldown: 0 };
+    // REV1 PORT (2026-11-23, Part B): the oncoming interceptor was
+    // head-on (heading PI/2) and read as a small white sedan. Same
+    // staging as the pursuit branch's VKPD-12 — MID-TURN across the
+    // hero's route, heading 0.70 rad (~50 deg across the road), so
+    // the chase camera sees its flank + roof light bar side-on.
+    // lightBarSteady keeps both pods bright in the frozen still.
+    // Position (228, 2.5) and the de-conflict keep-out are unchanged.
+    const oncoming = new Car(g, 'sedan', 0xf2f2f2, 228, 2.5, 0.70, true);
+    oncoming.unit = { name: 'VKPD-07', state: 'pursue', kind: 'cruiser', blockTarget: null, ramCooldown: 0, lightBarSteady: true };
     oncoming.speed = 25;
     oncoming.syncMesh();
     g.police.units.push(oncoming);
@@ -327,15 +334,20 @@ export function stageShot(kind, game) {
     // plus a warm point light, so the speed reads as fire as well as
     // motion. They ride on the car mesh, so they sit exactly at the
     // tailpipes whatever the final pose is.
+    // REV1 PORT (2026-11-23, Part B — cover to rev2 state): the
+    // pursuit branch toned the exhaust down (Codex: the glow washed
+    // out the rear tires). Same values here: shorter/smaller cones,
+    // opacity 0.9 -> 0.4, point light 8 -> 2.5 and distance 7 -> 4,
+    // so the rear tires and their contact shadow read on the deck.
     {
-      const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+      const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false });
       for (const s of [-1, 1]) {
-        const flame = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.8, 6), flameMat);
+        const flame = new THREE.Mesh(new THREE.ConeGeometry(0.10, 0.45, 6), flameMat);
         flame.rotation.z = Math.PI / 2;
         flame.position.set(-2.45, 0.32, s * 0.55);
         runCar.mesh.add(flame);
       }
-      const glow = new THREE.PointLight(0xff8a2a, 8, 7, 1.6);
+      const glow = new THREE.PointLight(0xff8a2a, 2.5, 4, 1.6);
       glow.position.set(-2.6, 0.5, 0);
       runCar.mesh.add(glow);
     }

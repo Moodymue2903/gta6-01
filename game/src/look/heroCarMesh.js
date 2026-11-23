@@ -451,8 +451,15 @@ export function buildHeroCar(cls, color, police = false) {
     const r = mesh(new THREE.BoxGeometry(0.38, 0.15, 0.36), new THREE.MeshBasicMaterial({ color: 0xff2222 }), -0.24, 0.09, 0);
     const b = mesh(new THREE.BoxGeometry(0.38, 0.15, 0.36), new THREE.MeshBasicMaterial({ color: 0x2244ff }), 0.24, 0.09, 0);
     lightBar.add(r, b);
+    // REV1 — steady-glow halo: a slightly larger additive shell over
+    // each pod so the bar reads at thumbnail size even in a still.
+    // police.js drives shell colour/opacity with the flash; a unit
+    // staged lightBarSteady keeps both shells bright.
+    const rGlow = mesh(new THREE.BoxGeometry(0.48, 0.24, 0.46), new THREE.MeshBasicMaterial({ color: 0xff2222, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }), -0.24, 0.09, 0);
+    const bGlow = mesh(new THREE.BoxGeometry(0.48, 0.24, 0.46), new THREE.MeshBasicMaterial({ color: 0x2244ff, transparent: true, opacity: 0.45, blending: THREE.AdditiveBlending, depthWrite: false }), 0.24, 0.09, 0);
+    lightBar.add(rGlow, bGlow);
     lightBar.position.set(-L * 0.04, roofTop + 0.1, 0);
-    lightBar.userData = { r, b };
+    lightBar.userData = { r, b, rGlow, bGlow };
     g.add(lightBar);
     // Push-bar bumper.
     for (const s of [-1, 1]) {

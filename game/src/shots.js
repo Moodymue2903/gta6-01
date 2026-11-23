@@ -589,25 +589,33 @@ export function stageShot(kind, game) {
       );
       rearGlass.position.set(-1.23, 0.98, 0);
       runCar.mesh.add(rearGlass);
-      const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending, depthWrite: false });
+      // REV1 — exhaust toned down (Codex: the glow washed out the rear
+      // tires): shorter/smaller cones, opacity 0.9 -> 0.4, point light
+      // 8 -> 2.5 and distance 7 -> 4, so the rear tires and their
+      // contact shadow read on the pavement. Tail bar + rear glass
+      // stay (they make the rear read as a car's rear).
+      const flameMat = new THREE.MeshBasicMaterial({ color: 0xffb347, transparent: true, opacity: 0.4, blending: THREE.AdditiveBlending, depthWrite: false });
       for (const s of [-1, 1]) {
-        const flame = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.8, 6), flameMat);
+        const flame = new THREE.Mesh(new THREE.ConeGeometry(0.10, 0.45, 6), flameMat);
         flame.rotation.z = Math.PI / 2;
         flame.position.set(-2.45, 0.32, s * 0.55);
         runCar.mesh.add(flame);
       }
-      const glow = new THREE.PointLight(0xff8a2a, 8, 7, 1.6);
+      const glow = new THREE.PointLight(0xff8a2a, 2.5, 4, 1.6);
       glow.position.set(-2.6, 0.5, 0);
       runCar.mesh.add(glow);
     }
-    // Interceptor ahead (coordinator fix — the AI units converge from
-    // 70-156 m away and none reads in frame, so the patrol lights
-    // would be invisible): one cruiser staged ahead on Ocean Drive at
-    // (135,108), heading west toward the hero, light bar flashing, a
-    // real police unit on the roster. 17 m ahead of the hero, clear of
-    // the 7 m de-conflict keep-out and of the fruit stand at (120,112).
-    const interceptor = new Car(g, 'sedan', 0xf2f2f2, 135, 108, -Math.PI / 2, true);
-    interceptor.unit = { name: 'VKPD-12', state: 'pursue', kind: 'cruiser', blockTarget: null, ramCooldown: 0 };
+    // Interceptor MID-TURN across the hero's route (REV1, Codex: the
+    // head-on car read as a small white sedan and its light bar was
+    // easy to miss): staged at (129,110), heading 0.70 rad — nose
+    // ~50 deg across the road, travelling ESE — so the rear chase
+    // camera sees the cruiser's LEFT flank + roof light bar side-on,
+    // not its nose. 11 m ahead of the hero, clear of the 7 m
+    // de-conflict keep-out, of the fruit stand at (120,112), and of
+    // the camera. lightBarSteady keeps both pods bright in the
+    // frozen still (police.js skips the 3 Hz flash for this unit).
+    const interceptor = new Car(g, 'sedan', 0xf2f2f2, 129, 110, 0.70, true);
+    interceptor.unit = { name: 'VKPD-12', state: 'pursue', kind: 'cruiser', blockTarget: null, ramCooldown: 0, lightBarSteady: true };
     interceptor.speed = 25;
     interceptor.syncMesh();
     g.police.units.push(interceptor);
@@ -625,6 +633,22 @@ export function stageShot(kind, game) {
     // behind (west) and ~1.35 m to the car's right (north), ~1.6 m up,
     // looking 12 m ahead down Ocean Drive.
     const pursuitCam = coverPose(runCar);
+    // REV1 camera (Codex: the tall facade on the frame's left edge
+    // occludes the harbour — the cranes at (130,-45)/(150,-55) sit
+    // ~80 deg off the coverPose view axis, so a small shift cannot
+    // reveal them): swing the lens north-east past the facade. The
+    // camera moves south to (113, 3.2, 118) and the lookAt swings to
+    // (135, 2, 85) — view axis ~-57 deg. Ground-truth probe
+    // (/tmp/probe-crane.mjs, live scene AABBs): crane 1 + 3 warn
+    // lights unblocked at sx ~330-380 (clear of the VKPD panel and
+    // of the green building's west face), the interceptor's light
+    // bar unblocked (the z=115 camera put the fruit-stand canopy
+    // between lens and bar), hero lower-centre, cruiser right of
+    // centre. coverPose itself is untouched (shared with the cover
+    // shot). This runs BEFORE the de-conflict block, so the keep-out
+    // uses the real lens.
+    pursuitCam.pos.set(113, 3.2, 118);
+    pursuitCam.lookAt.set(135, 2, 85);
     console.log('[pursuit-cam] hero=' + runCar.pos.x.toFixed(1) + ',' + runCar.pos.y.toFixed(1) + ',' + runCar.pos.z.toFixed(1) +
       ' heading=' + runCar.heading.toFixed(2) + ' speed=' + runCar.speed.toFixed(1) +
       ' cam=' + pursuitCam.pos.x.toFixed(1) + ',' + pursuitCam.pos.y.toFixed(1) + ',' + pursuitCam.pos.z.toFixed(1) +

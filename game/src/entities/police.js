@@ -489,12 +489,28 @@ export class Police {
           }
         }
       }
-      // Flash the light bar.
+      // Flash the light bar. REV1: a unit staged lightBarSteady
+      // keeps both pods (+ glow shells) bright, so a frozen still
+      // always shows the bar lit instead of catching the 3 Hz
+      // flash on its dim half-cycle.
       const lb = u.mesh.userData.lightBar;
       if (lb) {
-        const on = Math.floor(this.game.time * 6) % 2 === 0;
-        lb.userData.r.material.color.setHex(on ? 0xff2222 : 0x551111);
-        lb.userData.b.material.color.setHex(on ? 0x111155 : 0x2244ff);
+        if (unit.lightBarSteady) {
+          lb.userData.r.material.color.setHex(0xff2222);
+          lb.userData.b.material.color.setHex(0x2244ff);
+          if (lb.userData.rGlow) lb.userData.rGlow.material.opacity = 0.55;
+          if (lb.userData.bGlow) lb.userData.bGlow.material.opacity = 0.55;
+        } else {
+          const on = Math.floor(this.game.time * 6) % 2 === 0;
+          lb.userData.r.material.color.setHex(on ? 0xff2222 : 0x551111);
+          lb.userData.b.material.color.setHex(on ? 0x111155 : 0x2244ff);
+          if (lb.userData.rGlow) {
+            lb.userData.rGlow.material.color.setHex(on ? 0xff2222 : 0x551111);
+            lb.userData.rGlow.material.opacity = on ? 0.45 : 0.08;
+            lb.userData.bGlow.material.color.setHex(on ? 0x111155 : 0x2244ff);
+            lb.userData.bGlow.material.opacity = on ? 0.08 : 0.45;
+          }
+        }
       }
       u.update(dt, { throttle, steer, handbrake: false });
       // Unit-to-unit separation so cruisers do not pile up.

@@ -48,6 +48,10 @@
 //      exploration beyond driving, with the harbour on a clearer angle.
 //      The parked run car stays at the kerb behind the player; the
 //      camera is combatPose, the established on-foot third-person chase.
+//   7. map — THE MAP (third packaged shot, replaces the career
+//      dashboard): the whole archipelago full-screen — coastline,
+//      districts, a gold market-to-port route, safehouse/garage
+//      markers, the player at the market. The C1 fix.
 // The cover frame shows dialogue (Marco's KINGPIN line, pinned by
 // missionComms); the other frames clear it, so they read as pictures,
 // not chat logs.
@@ -63,6 +67,12 @@ import { fireProfileShot } from './systems/combat/tracers.js';
 // camera poses, all computed from the real sim pose.
 import { installAtmosphere } from './look/sunsetAtmosphere.js';
 import { coverPose, combatPose, garagePose } from './look/cinematicCamera.js';
+// MAP SHOT (C1 fix, 2026-11-23) — the baked minimap tile + district
+// data, reused full-screen; no new map renderer is invented.
+import { bakeMinimap } from './ui/minimapBaked.js';
+import { districtRects, MAP_MARKERS } from './world/cityLayout.js';
+import { buildViewModel } from './ui/viewModel.js';
+import { MAP_BOUNDS } from './ui/hudStyles.js';
 
 // FIX ROUND 7 — screen-space overlap check (plan requirement): project
 // the 8 corners of each car's world AABB to NDC and return the
@@ -88,6 +98,218 @@ function screenOverlap(g, a, b) {
   const oy = Math.max(0, Math.min(A.y1, B.y1) - Math.max(A.y0, B.y0));
   const areaA = (A.x1 - A.x0) * (A.y1 - A.y0);
   return areaA > 0 ? (ox * oy) / areaA : 0;
+}
+
+// ON-FOOT — a ped's shirt colour and a whole-shirt recolour. The
+// torso capsule and the upper-arm capsules share one shirt material,
+// so recolouring the torso alone leaves the arms the old colour.
+// Find that material from the torso capsule (the largest capsule in
+// the torso) and replace it on every mesh that shares it.
+function shirtColor(ped) {
+  const rig = ped.mesh && ped.mesh.userData && ped.mesh.userData.rig;
+  const torso = rig && rig.joints && rig.joints.torso;
+  if (!torso) return null;
+  let col = null;
+  torso.traverse((o) => {
+    if (col === null && o.isMesh && o.geometry && o.geometry.type === 'CapsuleGeometry' &&
+      o.geometry.parameters && o.geometry.parameters.radius > 0.1 &&
+      o.material && o.material.color) {
+      col = o.material.color.getHex();
+    }
+  });
+  return col;
+}
+function setShirtColor(ped, color) {
+  const rig = ped.mesh && ped.mesh.userData && ped.mesh.userData.rig;
+  const torso = rig && rig.joints && rig.joints.torso;
+  if (!torso) return false;
+  let shirtMat = null;
+  torso.traverse((o) => {
+    if (!shirtMat && o.isMesh && o.geometry && o.geometry.type === 'CapsuleGeometry' &&
+      o.geometry.parameters && o.geometry.parameters.radius > 0.1 &&
+      o.material && o.material.color) {
+      shirtMat = o.material;
+    }
+  });
+  if (!shirtMat) return false;
+  const mat = new THREE.MeshLambertMaterial({ color });
+  torso.traverse((o) => {
+    if (o.isMesh && o.material === shirtMat) o.material = mat;
+  });
+  return true;
+}
+
+// ON-FOOT (C1 follow-up) — if a ped's shirt is the contact yellow,
+// give them a non-yellow shirt. Returns true when a yellow shirt
+// was found and recoloured.
+function deYellow(ped, color) {
+  if (shirtColor(ped) !== 0xe8c93a) return false;
+  return setShirtColor(ped, color);
+}
+
+// MAP SHOT (C1 fix) — the market-to-port route along real graph edges:
+// market plaza -> Ocean Drive -> Marina Blvd -> drawbridge causeway ->
+// port road -> the container truck at the port.
+const MAP_ROUTE = [
+  [115, 125], [140, 125], [140, 110], [200, 110], [200, 0],
+  [230, 0], [250, 0], [250, -160], [300, -160], [380, -160], [380, -150],
+];
+const MAP_PORT = [380, -150];
+const MAP_MARKET = [115, 125];
+
+// Draw the whole of the Keys onto a canvas: the baked minimap tile
+// (water, islands, district tints, causeways, the real road graph)
+// scaled to fit, then district labels, the gold market-to-port route,
+// the safehouse/garage markers and the player arrow. No new map
+// renderer — the base is the existing baked tile, the overlays use
+// the same data and colours as the career map and the HUD minimap.
+function drawFullMap(canvas, game) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width;
+  const H = canvas.height;
+  const minX = MAP_BOUNDS[0];
+  const minZ = MAP_BOUNDS[1];
+  const maxX = MAP_BOUNDS[2];
+  const maxZ = MAP_BOUNDS[3];
+  const worldW = maxX - minX;
+  const worldH = maxZ - minZ;
+  const scale = Math.min(W / worldW, H / worldH);
+  const ox = (W - worldW * scale) / 2 - minX * scale;
+  const oy = (H - worldH * scale) / 2 - minZ * scale;
+  const X = (x) => ox + x * scale;
+  const Z = (z) => oy + z * scale;
+  // Base: the baked tile's world region, scaled to the canvas.
+  const b = bakeMinimap();
+  ctx.drawImage(
+    b.canvas,
+    b.ox + minX * b.scale, b.oy + minZ * b.scale,
+    worldW * b.scale, worldH * b.scale,
+    X(minX), Z(minZ), worldW * scale, worldH * scale,
+  );
+  // District outlines + labels.
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const d of districtRects()) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(X(d[2]), Z(d[3]), (d[4] - d[2]) * scale, (d[5] - d[3]) * scale);
+    ctx.font = 'bold 17px Arial';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(10, 25, 35, 0.85)';
+    ctx.strokeText(d[1], X(d[7]), Z(d[8]));
+    ctx.fillStyle = 'rgba(255, 233, 201, 0.95)';
+    ctx.fillText(d[1], X(d[7]), Z(d[8]));
+  }
+  // Gold route: dark under-stroke for contrast, then the gold line,
+  // then small chevrons along each leg pointing the way.
+  const route = (width, style) => {
+    ctx.strokeStyle = style;
+    ctx.lineWidth = width;
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    MAP_ROUTE.forEach(([x, z], i) => {
+      if (i === 0) ctx.moveTo(X(x), Z(z));
+      else ctx.lineTo(X(x), Z(z));
+    });
+    ctx.stroke();
+  };
+  route(9, 'rgba(15, 20, 25, 0.85)');
+  route(5, '#ffc27a');
+  for (let i = 0; i < MAP_ROUTE.length - 1; i++) {
+    const [ax, az] = MAP_ROUTE[i];
+    const [bx, bz] = MAP_ROUTE[i + 1];
+    const mx = (ax + bx) / 2;
+    const mz = (az + bz) / 2;
+    const ang = Math.atan2(bz - az, bx - ax);
+    ctx.save();
+    ctx.translate(X(mx), Z(mz));
+    ctx.rotate(ang);
+    ctx.fillStyle = '#ffc27a';
+    ctx.beginPath();
+    ctx.moveTo(7, 0);
+    ctx.lineTo(-5, -6);
+    ctx.lineTo(-5, 6);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+  // Markers: safehouse + garage from the career map data, the market
+  // start and the port destination.
+  const dot = (x, z, r, color, label, dy) => {
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(X(x), Z(z), r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    if (label) {
+      ctx.font = 'bold 15px Arial';
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = 'rgba(10, 25, 35, 0.85)';
+      ctx.strokeText(label, X(x), Z(z) + dy);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(label, X(x), Z(z) + dy);
+    }
+  };
+  for (const m of MAP_MARKERS) dot(m.x, m.z, 6, m.color, m.label, m.dy * 2.3);
+  dot(MAP_MARKET[0], MAP_MARKET[1], 10, '#ffc27a', 'MARKET', 26);
+  dot(MAP_PORT[0], MAP_PORT[1], 10, '#ff5a3c', 'PORT', 26);
+  // Player arrow at the market, pointing east along the route.
+  ctx.save();
+  ctx.translate(X(MAP_MARKET[0]), Z(MAP_MARKET[1]));
+  ctx.rotate(Math.PI / 2);
+  ctx.fillStyle = '#ffffff';
+  ctx.strokeStyle = '#222222';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, -13);
+  ctx.lineTo(9, 10);
+  ctx.lineTo(-9, 10);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+  // Compass.
+  ctx.font = 'bold 18px Arial';
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('N', W - 28, 30);
+  ctx.beginPath();
+  ctx.moveTo(W - 28, 38);
+  ctx.lineTo(W - 33, 50);
+  ctx.lineTo(W - 23, 50);
+  ctx.closePath();
+  ctx.fill();
+  void game;
+}
+
+// Build the full-screen map overlay (DOM, like the career screen):
+// header with the live career stats, the map canvas, a legend strip.
+// Hides the HUD so nothing bleeds through the map.
+function buildMapOverlay(game) {
+  const vm = buildViewModel(game);
+  const root = document.getElementById('menus') || document.body;
+  const overlay = document.createElement('div');
+  overlay.id = 'map-shot';
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:1000;background:#08131c;display:flex;flex-direction:column;font-family:Arial,sans-serif;color:#fff;';
+  overlay.innerHTML = `
+    <div style="height:64px;flex:0 0 64px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;background:#0a1a24;border-bottom:2px solid rgba(255,194,122,0.45);">
+      <div><span style="font-size:26px;font-weight:900;letter-spacing:2px;">VERMILION KEYS</span> <span style="font-size:16px;letter-spacing:3px;color:#ffc27a;">— THE KEYS · ISLAND MAP</span></div>
+      <div style="font-size:16px;letter-spacing:1px;">${vm.career.pctNum} COMPLETE · ${vm.career.rank} · ${vm.career.cash} · 8 DISTRICTS · 3 ISLANDS</div>
+    </div>
+    <canvas id="map-shot-canvas" width="1280" height="608" style="flex:1 1 auto;width:1280px;height:608px;display:block;"></canvas>
+    <div style="height:48px;flex:0 0 48px;display:flex;align-items:center;gap:26px;padding:0 28px;background:#0a1a24;border-top:2px solid rgba(255,194,122,0.45);font-size:15px;letter-spacing:1px;">
+      <span><i style="display:inline-block;width:26px;height:5px;background:#ffc27a;vertical-align:middle;margin-right:8px;"></i>MARKET → PORT ROUTE — DRIVE IT</span>
+      <span><i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ffc27a;vertical-align:middle;margin-right:6px;"></i>MARKET</span>
+      <span><i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#ff5a3c;vertical-align:middle;margin-right:6px;"></i>PORT</span>
+      <span><i style="display:inline-block;width:12px;height:12px;border-radius:50%;background:#38bdf8;vertical-align:middle;margin-right:6px;"></i>GARAGE</span>
+      <span><i style="display:inline-block;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-bottom:12px solid #fff;vertical-align:middle;margin-right:6px;"></i>YOU</span>
+    </div>`;
+  root.appendChild(overlay);
+  const canvas = document.getElementById('map-shot-canvas');
+  if (canvas) drawFullMap(canvas, game);
+  game.hud.root.style.display = 'none';
 }
 
 export function stageShot(kind, game) {
@@ -826,23 +1048,17 @@ export function stageShot(kind, game) {
       contact.mesh.visible = true;
       contact.state = 'walk';
       contact.idle = 0;
-      // Yellow shirt: the torso mesh lives in the character rig
-      // (contact.mesh.userData.rig.joints.torso). contact.mesh.children[0]
-      // is the pelvis Group, so assigning .material to it does nothing
-      // (attempt 2: the contact rendered in its random shirt, not yellow).
-      // Recolour the torso's own meshes — direct children only, so the
-      // neck/head subtree and the phone are left alone. Same pattern as
+      // Yellow shirt: the whole shirt (torso + upper arms share one
+      // material) in 0xe8c93a. contact.mesh.children[0] is the pelvis
+      // Group, so assigning .material to it does nothing (attempt 2:
+      // the contact rendered in its random shirt, not yellow).
+      // setShirtColor recolours the torso and the arms together, so
+      // the shirt reads uniformly yellow (attempt 3's torso-only fix
+      // left the arms the ped's random colour). Same pattern as
       // Pedestrians.downBody (FIX ROUND 4).
-      const yellow = new THREE.MeshLambertMaterial({ color: 0xe8c93a });
-      const rig = contact.mesh.userData && contact.mesh.userData.rig;
-      const torso = rig && rig.joints && rig.joints.torso;
-      if (torso) {
-        for (const o of torso.children) {
-          if (o.isMesh && o !== contact.mesh.userData.phone) o.material = yellow;
-        }
-      } else {
+      if (!setShirtColor(contact, 0xe8c93a)) {
         const body = contact.mesh.children[0];
-        if (body) body.material = yellow;
+        if (body) body.material = new THREE.MeshLambertMaterial({ color: 0xe8c93a });
       }
     }
     // Promenade peds near the player at the port gap: the
@@ -866,6 +1082,34 @@ export function stageShot(kind, game) {
       p.state = 'walk';
       p.idle = 0;
     });
+    // ONLY the contact wears yellow (Codex: attempt 3 had two yellow
+    // shirts in frame). Sweep every ped except the contact: any whose
+    // shirt is the contact yellow gets a non-yellow shirt instead.
+    // The sweep runs after all peds are staged, so it catches the
+    // promenade peds, the market crowd and any straggler in frame.
+    const NON_YELLOW = [0x3a7ad9, 0x2ea88a, 0xd97bd9, 0xe84a3a, 0xe8e8e8, 0x8a6a3a];
+    let deYellowed = 0;
+    for (const p of g.peds.peds) {
+      if (!p || p === contact) continue;
+      if (deYellow(p, NON_YELLOW[deYellowed % NON_YELLOW.length])) deYellowed++;
+    }
+    console.log('[onfoot-deyellow] recoloured=' + deYellowed);
+    // INTERACTION CUE: a gold diamond floating above the contact's
+    // head — the one person to talk to. (Codex: attempt 3 had no
+    // visible interaction to identify the contact. The HUD dialogue
+    // and prompt are no-ops in hudV3 and the mission-comms card has
+    // no contact line, so the cue is a 3D marker in the scene itself,
+    // where the renderer guarantees it is visible.) Unlit gold, so
+    // it reads in daylight at thumbnail size.
+    if (contact) {
+      const marker = new THREE.Mesh(
+        new THREE.OctahedronGeometry(0.38),
+        new THREE.MeshBasicMaterial({ color: 0xff9a3a }),
+      );
+      marker.position.set(contact.pos.x, 2.5, contact.pos.z);
+      g.scene.add(marker);
+      console.log('[onfoot-marker] diamond at ' + contact.pos.x.toFixed(1) + ',' + contact.pos.z.toFixed(1));
+    }
     // Interceptor MID-TURN across the route (REV1 staging, same as the
     // pursuit branch): at (129,110), heading 0.70 rad, light bar
     // steady — the responding police in frame ahead of the market.
@@ -1201,6 +1445,23 @@ export function stageShot(kind, game) {
     g.camera.fov = garageCam.fov;
     g.camera.updateProjectionMatrix();
     g.menus.showGarage();
+  } else if (kind === 'map') {
+    // THE MAP (C1 fix, 2026-11-23): the whole of the Keys on one
+    // screen — the baked minimap tile full-screen, district labels,
+    // a gold MARKET → PORT route along real graph edges, and the
+    // safehouse/garage markers. This replaces the career dashboard
+    // as the third packaged shot (screenshots/3-career.jpg keeps its
+    // filename); the career evidence stays in the header stats and
+    // in the HUD of the other frames. Day light, no heat, the player
+    // at the market — the start of the route.
+    const { runCar } = stageRun(g);
+    void runCar;
+    g.lighting.setTimeOfDay('day');
+    g.police.clearHeat();
+    g.player.spawn(115, 125, Math.PI / 2);
+    // High wide camera over the archipelago, behind the overlay.
+    g.cameraCtl.setShotPose([0, 260, 260], [0, 0, 0]);
+    buildMapOverlay(g);
   }
 
   // Freeze the world, render one settled frame, dump the live state for
@@ -1223,6 +1484,7 @@ export function stageShot(kind, game) {
     : kind === 'onfoot' ? { x: 112, z: 122, r: 60 }
     : kind === 'combat' ? { x: 392, z: -162, r: 45 }
     : kind === 'career' ? { x: 0, z: 0, r: 260 }
+    : kind === 'map' ? { x: 200, z: 0, r: 300 }
     : { x: 52, z: 128, r: 45 };
   dumpState(g, kind, focus);
   g.renderer.render(g.scene, g.camera);

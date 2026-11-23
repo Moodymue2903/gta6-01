@@ -22,6 +22,7 @@
 import * as THREE from 'three';
 import { choice, rand } from '../util.js';
 import { randomSidewalkPoint } from '../world/roadNetwork.js';
+import { createCharacter } from '../look/characterRig.js';
 
 const COUNT = 35;
 const SHIRTS = [0xe84a3a, 0x3a7ad9, 0xe8c93a, 0x2ea88a, 0xd97bd9, 0xe8e8e8, 0x222226, 0xd97b2e, 0x8a6a3a];
@@ -81,7 +82,7 @@ export class Pedestrians {
   }
 
   spawn(rng, x, z) {
-    const mesh = makePedMesh(choice(rng, SHIRTS));
+    const mesh = createCharacter({ bodyType: 'ped', clothing: { shirt: choice(rng, SHIRTS) } });
     this.game.scene.add(mesh);
     return {
       mesh,
@@ -106,7 +107,7 @@ export class Pedestrians {
   // A syndicate guard: holds a fixed post, never wanders, never respawns.
   // cover=true puts them crouched behind a stall.
   spawnGuard(x, z, heading, cover = false) {
-    const mesh = makePedMesh(0x1a1a20, { guard: true });
+    const mesh = createCharacter({ bodyType: 'guard', clothing: { shirt: 0x1a1a20 }, weapon: 'smg' });
     this.game.scene.add(mesh);
     const p = {
       mesh,
@@ -136,7 +137,7 @@ export class Pedestrians {
 
   // A static figure that never wanders (the garage mechanic Lo).
   spawnStatic(x, z, heading, shirt) {
-    const mesh = makePedMesh(shirt);
+    const mesh = createCharacter({ bodyType: 'ped', clothing: { shirt } });
     this.game.scene.add(mesh);
     const p = {
       mesh,
@@ -180,9 +181,24 @@ export class Pedestrians {
     p.mesh.userData.phone.visible = false;
     p.mesh.rotation.set(Math.PI / 2 - 0.15, p.heading, 0);
     p.mesh.position.y = 0.35;
-    // Pale shirt: the torso is the first child of the ped group.
-    const body = p.mesh.children[0];
-    if (body) body.material = new THREE.MeshLambertMaterial({ color: 0xd8cbb8 });
+    // Pale shirt: the torso mesh lives in the character rig
+    // (p.mesh.userData.rig.joints.torso). p.mesh.children[0] is the
+    // pelvis Group since the createCharacter rig landed, so the old
+    // assignment set .material on a Group and did nothing. Recolour
+    // the torso's own meshes (shirt capsule, vest, collar, strap,
+    // belt) — direct children only, so the neck/head subtree and the
+    // phone (emissive screen) are left alone.
+    const rig = p.mesh.userData && p.mesh.userData.rig;
+    const torso = rig && rig.joints && rig.joints.torso;
+    const pale = new THREE.MeshLambertMaterial({ color: 0xd8cbb8 });
+    if (torso) {
+      for (const o of torso.children) {
+        if (o.isMesh && o !== p.mesh.userData.phone) o.material = pale;
+      }
+    } else {
+      const body = p.mesh.children[0];
+      if (body) body.material = pale;
+    }
     // Blood pool under the torso.
     const pool = new THREE.Mesh(
       new THREE.CircleGeometry(0.55, 12),

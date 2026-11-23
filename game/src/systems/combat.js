@@ -20,7 +20,7 @@
 // kill is counted on the combat system so the state dump can read it.
 
 import * as THREE from 'three';
-import { clamp } from '../util.js';
+import { getRigMuzzle } from '../look/characterRig.js';
 
 export const WEAPONS = [
   { id: 'fists', name: 'FISTS', dmg: 20, range: 2.4, rate: 2.2, auto: false, ammo: Infinity, mag: Infinity },
@@ -225,6 +225,10 @@ export class Combat {
     const shooterPos = this.game.player.inCar ? this.game.player.inCar.pos : this.game.player.pos;
     const muzzle = shooterPos.clone().addScaledVector(dir, 1.2);
     muzzle.y = shooterPos.y + (this.game.player.inCar ? 1.2 : 1.45);
+    // FIX ROUND 8 — if the player mesh is a character rig, the muzzle
+    // is the weapon's own muzzle, not a point 1.2 m ahead of the feet.
+    const rigMuzzle = getRigMuzzle(this.game.player?.mesh);
+    if (rigMuzzle) muzzle.copy(rigMuzzle);
     // Muzzle flash at the gun + its light.
     this.flash.position.copy(muzzle);
     this.flash.lookAt(origin.clone().addScaledVector(dir, 5));

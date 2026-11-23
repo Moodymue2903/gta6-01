@@ -20,6 +20,19 @@ import { edgeHeading, lanePoint, nearestRoadPoint } from '../world/roadNetwork.j
 const UNIT_NAMES = ['VKPD-07', 'VKPD-12', 'VKPD-19', 'VKPD-23', 'VKPD-31', 'VKPD-44', 'VKPD-52', 'VKPD-68', 'VKPD-71', 'VKPD-85'];
 const MAX_UNITS = 8;
 
+// FIX ROUND 8 — safe police spawn offsets. A spawned unit is never
+// placed on top of the hero (the Tidebreak police-wedge bug: a unit
+// spawning on the hero and pinning it to 0-3 km/h must NOT exist
+// here): at least MIN_HERO_DIST from the hero car, at least
+// MIN_UNIT_DIST from every other unit, on a road (a lane point on the
+// nearest road edge, never inside a building), and never within
+// AHEAD_CLEAR directly ahead of a moving hero's nose. Enforced in
+// spawnUnit: retry candidates first, then push out / sweep to a road
+// point that clears every rule.
+const MIN_HERO_DIST = 12;
+const MIN_UNIT_DIST = 8;
+const AHEAD_CLEAR = 3;
+
 function makeHeliMesh() {
   const g = new THREE.Group();
   // FIX ROUND 2 — full remodel. The old heli was a white box with a
@@ -230,11 +243,69 @@ export class Police {
     const player = this.game.player;
     const px = player.inCar ? player.inCar.pos.x : player.pos.x;
     const pz = player.inCar ? player.inCar.pos.z : player.pos.z;
-    const near = nearestRoadPoint(px + rand(this.game.rng, -90, 90), pz + rand(this.game.rng, -90, 90));
-    const side = this.game.rng() < 0.5 ? 1 : -1;
-    const p = lanePoint(near.edge, near.t, side);
+    const heroHeading = player.inCar ? player.inCar.heading : player.heading;
+    const heroSpeed = player.inCar ? Math.abs(player.inCar.speed) : 0;
+    // A candidate spawn point: a lane point on the nearest road edge
+    // to a random point near the hero (on a road by construction).
+    const pick = () => {
+      const near = nearestRoadPoint(px + rand(this.game.rng, -90, 90), pz + rand(this.game.rng, -90, 90));
+      const side = this.game.rng() < 0.5 ? 1 : -1;
+      const p = lanePoint(near.edge, near.t, side);
+      return { x: p.x, z: p.z, edge: near.edge, t: near.t, side };
+    };
+    // Clear of the hero: MIN_HERO_DIST away, and never within
+    // AHEAD_CLEAR directly ahead of a moving hero's nose (along-track
+    // 0..AHEAD_CLEAR, lateral < 2.5 m) — the wedge that pins the hero.
+    const clearOfHero = (x, z) => {
+      const dx = x - px;
+      const dz = z - pz;
+      if (Math.hypot(dx, dz) < MIN_HERO_DIST) return false;
+      if (heroSpeed > 1) {
+        const fx = Math.sin(heroHeading);
+        const fz = Math.cos(heroHeading);
+        const along = dx * fx + dz * fz;
+        const lat = Math.abs(dx * fz - dz * fx);
+        if (along > 0 && along < AHEAD_CLEAR && lat < 2.5) return false;
+      }
+      return true;
+    };
+    // Clear of every other unit (police, roadblock cars included).
+    const clearOfUnits = (x, z) => {
+      for (const u of this.units) {
+        if (Math.hypot(u.pos.x - x, u.pos.z - z) < MIN_UNIT_DIST) return false;
+      }
+      return true;
+    };
+    const clear = (x, z) => clearOfHero(x, z) && clearOfUnits(x, z);
+    // First: retry random candidates.
+    let spot = null;
+    for (let i = 0; i < 12 && !spot; i++) {
+      const c = pick();
+      if (clear(c.x, c.z)) spot = c;
+    }
+    // Then: push out — fixed rays at 12/20/30/45/60 m, re-snapped to
+    // the road, first point that clears every rule. Hero safety
+    // outranks unit spacing in the pathological case (tracked below).
+    let heroClear = null;
+    if (!spot) {
+      outer: for (const r of [MIN_HERO_DIST, 20, 30, 45, 60]) {
+        for (let k = 0; k < 8; k++) {
+          const a = (k / 8) * Math.PI * 2;
+          const near = nearestRoadPoint(px + Math.sin(a) * r, pz + Math.cos(a) * r);
+          for (const side of [1, -1]) {
+            const p = lanePoint(near.edge, near.t, side);
+            if (!heroClear && clearOfHero(p.x, p.z)) heroClear = { x: p.x, z: p.z, edge: near.edge, t: near.t, side };
+            if (clear(p.x, p.z)) {
+              spot = { x: p.x, z: p.z, edge: near.edge, t: near.t, side };
+              break outer;
+            }
+          }
+        }
+      }
+    }
+    if (!spot) spot = heroClear;
     const cls = kind === 'swat' ? 'van' : 'sedan';
-    const car = new Car(this.game, cls, 0xf2f2f2, p.x, p.z, edgeHeading(near.edge, side), true);
+    const car = new Car(this.game, cls, 0xf2f2f2, spot.x, spot.z, edgeHeading(spot.edge, spot.side), true);
     car.unit = {
       name: kind === 'swat' ? 'SWAT-' + (++this._unitSeq) : choice(this.game.rng, UNIT_NAMES),
       state: 'pursue',

@@ -32,21 +32,30 @@ export function buildGarageInterior(scene) {
   scene.add(ceiling);
 
   // Two-post hydraulic lift: two posts + arms under the car.
-  const liftMat = new THREE.MeshLambertMaterial({ color: 0x2a7ad9 });
+  // FIX (garage post crossing the car): the posts used to flank the
+  // car at +/-1.4 m on its centre line (cz), so from the front-left
+  // three-quarter garage camera the west post projected across the
+  // car's midsection. They now stand 1.6 m toward the car's REAR
+  // (cz-1.6, just behind the rear bumper line) and 1.8 m out, so from
+  // the garage camera the west post projects ~50 px left of the car's
+  // rear-left silhouette edge and the east post is hidden behind the
+  // car body except for its top peeking above the roofline as bay
+  // equipment. (Verified by projecting camera/car/post geometry.)
+  const liftMat = new THREE.MeshLambertMaterial({ color: 0x1a4d8f });
   for (const s of [-1, 1]) {
     const post = new THREE.Mesh(new THREE.BoxGeometry(0.5, 2.6, 0.5), liftMat);
-    post.position.set(cx + s * 1.4, 1.3, cz);
+    post.position.set(cx + s * 1.8, 1.3, cz - 1.6);
     post.castShadow = true;
     scene.add(post);
-    const arm = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.18, 0.4), liftMat);
-    arm.position.set(cx + s * 0.7, 0.55, cz);
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.18, 0.4), liftMat);
+    arm.position.set(cx + s * 0.9, 0.55, cz - 1.6);
     scene.add(arm);
   }
   const liftPad = new THREE.Mesh(
     new THREE.BoxGeometry(4.6, 0.18, 2.4),
     new THREE.MeshLambertMaterial({ color: 0x3a3a44 }),
   );
-  liftPad.position.set(cx, 0.45, cz);
+  liftPad.position.set(cx, 0.45, cz - 0.4);
   liftPad.castShadow = true;
   liftPad.receiveShadow = true;
   scene.add(liftPad);
@@ -107,6 +116,21 @@ export function buildGarageInterior(scene) {
 
   // Warm bay lights + bright door light.
   addWarmBayLights(scene, cx, cz);
+
+  // FIX (pale car at dusk): the car read pale peach/cream in rounds
+  // 1-4 while the paint was assumed to be vermilion 0xe85a24 — it was
+  // actually light salmon 0xff7a55 (shotDirector.js run car; fixed
+  // there to 0xe85a24). Rounds 1-4 proved the wash was not the light
+  // level, the bay lights, or the env: adding a 120 spot, dimming the
+  // bay lights 26 -> 7, and cutting envMapIntensity 1.4 -> 0.2 each
+  // barely moved the car's pixels, so all three were reverted. This
+  // modest saturated-orange key spot stays: it warms the camera-facing
+  // flank the garage camera sees, at a level that cannot wash it out.
+  const keySpot = new THREE.SpotLight(0xff8a30, 30, 20, 0.45, 0.5, 1.6);
+  keySpot.position.set(cx - 4, 4.6, cz + 4);
+  keySpot.target.position.set(cx, 0.8, cz);
+  scene.add(keySpot);
+  scene.add(keySpot.target);
 
   return {
     colliders,

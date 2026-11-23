@@ -22,8 +22,10 @@
 // line reads V$ like every other cash figure in the game.
 
 import { buildViewModel } from './viewModel.js';
-import { renderCareer, renderPause } from './pauseMenu.js';
-import { renderGarage, garageBuy as buyFromGarage } from './garageMenu.js';
+import { renderPause } from './pauseMenu.js';
+import { renderCareerV3 } from './careerView.js';
+import { renderGarageSet } from './garageSet.js';
+import { garageBuy as buyFromGarage } from './garageMenu.js';
 
 export class Menus {
   constructor(game) {
@@ -107,8 +109,10 @@ export class Menus {
   // while it is open — otherwise the mission card, roster, minimap and
   // cash box bleed through the warm glass and collide with the career
   // text. The aerial render still shows through behind the glass.
+  // FIX ROUND 8 — career screen v3 (careerView.js): one dark panel,
+  // giant ring + rank + activities + three tiles, live view-model.
   showCareer() {
-    renderCareer(this.game, this.careerEl, buildViewModel(this.game));
+    renderCareerV3(this.game, this.careerEl, buildViewModel(this.game));
     this.careerEl.classList.add('show');
     this.game.hud.root.style.display = 'none';
   }
@@ -129,8 +133,10 @@ export class Menus {
     this.garageEl.classList.remove('show');
   }
 
+  // FIX ROUND 8 — garage studio v3 (garageSet.js): the 3D room +
+  // spec panel with the five real upgrades, live state.
   refreshGarage() {
-    renderGarage(this.game, this.garageEl, this._garageMsg);
+    renderGarageSet(this.game, this.garageEl, this._garageMsg);
   }
 
   // Buy from the garage screen (keys 1–5); refreshes the panel so the

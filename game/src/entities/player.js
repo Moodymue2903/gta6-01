@@ -3,7 +3,16 @@
 // camera yaw so WASD always feels like the screen's directions.
 
 import * as THREE from 'three';
-import { clamp } from '../util.js';
+import {
+  PURSUIT_ROUTE,
+  ROAD_HALF,
+  circleHitsAnyCollider,
+  nearestRoadPoint,
+  nearestRouteWaypoint,
+  pointInAnyCollider,
+  resolveCircleVsColliders,
+} from '../world/roadNetwork.js';
+import { createCharacter } from '../look/characterRig.js';
 
 function limb(w, h, d, color) {
   const m = new THREE.Mesh(
@@ -45,7 +54,7 @@ export function makePlayerMesh() {
 export class Player {
   constructor(game) {
     this.game = game;
-    this.mesh = makePlayerMesh();
+    this.mesh = createCharacter({ bodyType: 'player', weapon: 'smg' });
     this.pos = new THREE.Vector3(0, 0, 0);
     this.heading = 0;
     this.vy = 0;
@@ -58,6 +67,14 @@ export class Player {
     // FIX ROUND 3 — aim timer: combat.fire() sets this to 0.35 s; while
     // it is > 0 the right arm holds the aim pose (gun out, arm raised).
     this.aimT = 0;
+    // Stuck-reset (pursuit route): last known good on-road position, the
+    // stuck timer, and the previous frame's position (to measure real
+    // movement). lastGood is only ever recorded on a road and outside
+    // every collider, so a reset can never place the player in geometry.
+    this._lastGood = null;
+    this._stuckT = 0;
+    this._prevX = 0;
+    this._prevZ = 0;
     game.scene.add(this.mesh);
   }
 
@@ -68,6 +85,10 @@ export class Player {
     this.dead = false;
     this.inCar = null;
     this.mesh.visible = true;
+    this._lastGood = { x, z };
+    this._stuckT = 0;
+    this._prevX = x;
+    this._prevZ = z;
     this.syncMesh();
   }
 
@@ -127,19 +148,39 @@ export class Player {
         this.grounded = true;
       }
     }
-    // Building collision (circle vs AABB).
+    // Building collision (circle vs AABB) with the wall-trap guard:
+    // resolveCircleVsColliders pushes out along the smallest penetration
+    // axis when the centre is INSIDE a box, so walking into a wall
+    // slides along it and can never leave the player inside a building.
+    // (The old loop did nothing when the centre was inside — d2 <=
+    // 0.0001 — which was the Tidebreak wall-trap.)
     const r = 0.5;
-    for (const c of this.game.city.colliders) {
-      const cx = clamp(this.pos.x, c.x0, c.x1);
-      const cz = clamp(this.pos.z, c.z0, c.z1);
-      const dx = this.pos.x - cx;
-      const dz = this.pos.z - cz;
-      const d2 = dx * dx + dz * dz;
-      if (d2 < r * r && d2 > 0.0001) {
-        const d = Math.sqrt(d2);
-        this.pos.x += (dx / d) * (r - d);
-        this.pos.z += (dz / d) * (r - d);
-      }
+    const colliders = this.game.city?.colliders || [];
+    if (colliders.length) {
+      const solved = resolveCircleVsColliders(this.pos.x, this.pos.z, r, colliders);
+      this.pos.x = solved.x;
+      this.pos.z = solved.z;
+    }
+    // Stuck-reset: track the last known good on-road position (only
+    // recorded while moving on a road and outside every collider), and
+    // watch for being stuck — movement keys held but real speed under
+    // 0.5 m/s for more than 2 s (wedged against a wall, or oscillating
+    // in and out of a collider the guard keeps pushing out of), or the
+    // position still inside a collider after the guard ran (the guard
+    // should have fixed it; this is the backstop).
+    const moved = Math.hypot(this.pos.x - this._prevX, this.pos.z - this._prevZ);
+    const speedNow = dt > 0 ? moved / dt : 0;
+    this._prevX = this.pos.x;
+    this._prevZ = this.pos.z;
+    const trying = mx !== 0 || mz !== 0;
+    if (trying && speedNow < 0.5) this._stuckT += dt;
+    else this._stuckT = 0;
+    if (colliders.length && !pointInAnyCollider(this.pos.x, this.pos.z, colliders)) {
+      const near = nearestRoadPoint(this.pos.x, this.pos.z);
+      if (near.dist <= ROAD_HALF) this._lastGood = { x: this.pos.x, z: this.pos.z };
+    }
+    if (this._stuckT > 2 || (colliders.length && pointInAnyCollider(this.pos.x, this.pos.z, colliders))) {
+      this.resetStuck();
     }
     // FIX ROUND 3 — aim pose (runs last, so it wins over the walk swing
     // and the idle decay): right arm raised FORWARD, gun out, while aimT
@@ -149,6 +190,29 @@ export class Player {
       this.aimT -= dt;
       this.mesh.userData.armR.rotation.x = 1.3;
     }
+    this.syncMesh();
+  }
+
+  // Stuck-reset: return to the last known good on-road position, or the
+  // nearest PURSUIT_ROUTE waypoint the player can stand on, or the route
+  // start (60,-140). Every candidate is checked against the colliders
+  // first, so the reset can never place the player inside geometry.
+  resetStuck() {
+    const colliders = this.game.city?.colliders || [];
+    const r = 0.5;
+    let target = null;
+    if (this._lastGood && !circleHitsAnyCollider(this._lastGood.x, this._lastGood.z, r, colliders)) {
+      target = this._lastGood;
+    } else if (colliders.length) {
+      target = nearestRouteWaypoint(this.pos.x, this.pos.z, r, colliders);
+    }
+    if (!target) target = { x: PURSUIT_ROUTE.start[0], z: PURSUIT_ROUTE.start[1] };
+    this.pos.set(target.x, 0, target.z);
+    this.vy = 0;
+    this.grounded = true;
+    this._stuckT = 0;
+    this._prevX = target.x;
+    this._prevZ = target.z;
     this.syncMesh();
   }
 

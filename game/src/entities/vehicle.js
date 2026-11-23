@@ -19,9 +19,18 @@
 
 import * as THREE from 'three';
 import { PALETTE, clamp } from '../util.js';
-import { isLand } from '../world/roadNetwork.js';
+import {
+  PURSUIT_ROUTE,
+  ROAD_HALF,
+  circleHitsAnyCollider,
+  isLand,
+  nearestRoadPoint,
+  nearestRouteWaypoint,
+  pointInAnyCollider,
+  resolveCircleVsColliders,
+} from '../world/roadNetwork.js';
 import { tintedGlassMaterial, lighterShade, makeCarLights, addRoofPanel } from '../world/vehicleMaterials.js';
-import { buildSmoothBody } from '../world/vehicleBodyBuilder.js';
+import { buildHeroCar } from '../look/heroCarMesh.js';
 import { checkStuntLanding } from '../systems/activities/stuntJumps.js';
 
 export const VEHICLE_CLASSES = {
@@ -143,9 +152,9 @@ export class Car {
     this.def = VEHICLE_CLASSES[cls];
     this.color = color;
     this.police = police;
-    // FIX ROUND 7 — smooth bodies from vehicleBodyBuilder (drop-in for
-    // makeCarMesh: same signature, same userData, same dims).
-    this.mesh = buildSmoothBody(cls, color, police);
+    // FIX ROUND 8 — hero car from look/heroCarMesh (cross-section loft,
+    // drop-in for buildSmoothBody: same signature, same userData, same dims).
+    this.mesh = buildHeroCar(cls, color, police);
     this.pos = new THREE.Vector3(x, 0, z);
     this.heading = heading;
     this.speed = 0;
@@ -164,6 +173,12 @@ export class Car {
     this.tune = { engine: 0, armour: 0, handling: 0 };
     this._airStart = null; // takeoff point, for the longest-jump ledger
     this._airT0 = null; // takeoff time, for the stunt airtime check
+    // Stuck-reset (pursuit route, player's car only): last known good
+    // on-road position and the stuck timer. lastGood is only recorded
+    // while driving on a road and outside every collider, so a reset can
+    // never place the car in geometry.
+    this._lastGood = { x, z };
+    this._stuckT = 0;
     this.syncMesh();
     game.scene.add(this.mesh);
   }
@@ -329,22 +344,42 @@ export class Car {
       }
     }
 
-    // Building collision: circle vs AABB push-out.
+    // Building collision: circle vs AABB push-out with the wall-trap
+    // guard. resolveCircleVsColliders pushes out along the smallest
+    // penetration axis when the centre is INSIDE a box, so driving into
+    // a wall slides along it and can never leave the car inside a
+    // building. (The old loop did nothing when the centre was inside —
+    // d2 <= 0.0001 — which was the Tidebreak wall-trap: a car whose
+    // lane line runs through a building stayed trapped in it.)
+    // Damage + slowdown are applied once per frame on a hit, as before.
     const r = this.def.len / 2;
-    for (const c of this.game.city.colliders) {
-      const cx = clamp(this.pos.x, c.x0, c.x1);
-      const cz = clamp(this.pos.z, c.z0, c.z1);
-      const dx = this.pos.x - cx;
-      const dz = this.pos.z - cz;
-      const d2 = dx * dx + dz * dz;
-      if (d2 < r * r && d2 > 0.0001) {
-        const d = Math.sqrt(d2);
-        const push = (r - d) / d;
-        this.pos.x += dx * push;
-        this.pos.z += dz * push;
+    const colliders = this.game.city?.colliders || [];
+    if (colliders.length) {
+      const solved = resolveCircleVsColliders(this.pos.x, this.pos.z, r, colliders);
+      if (solved.hit) {
         const impact = Math.abs(this.speed);
         if (impact > 12) this.damage(impact * 0.5, 'wall');
         this.speed *= 0.55;
+      }
+      this.pos.x = solved.x;
+      this.pos.z = solved.z;
+    }
+
+    // Stuck-reset, player's car only (traffic / police cars are never
+    // teleported): track the last known good on-road position while
+    // driving, and watch for being stuck — throttle held but speed
+    // under 0.5 m/s for more than 2 s (wedged against a wall, or
+    // oscillating in and out of a collider the guard keeps pushing out
+    // of), or the position still inside a collider after the guard ran.
+    if (this.game.player && this.game.player.inCar === this && colliders.length) {
+      if (!this.airborne && Math.abs(this.speed) > 1 && !pointInAnyCollider(this.pos.x, this.pos.z, colliders)) {
+        const near = nearestRoadPoint(this.pos.x, this.pos.z);
+        if (near.dist <= ROAD_HALF) this._lastGood = { x: this.pos.x, z: this.pos.z };
+      }
+      if (input && Math.abs(input.throttle) > 0.1 && Math.abs(this.speed) < 0.5) this._stuckT += dt;
+      else this._stuckT = 0;
+      if (this._stuckT > 2 || pointInAnyCollider(this.pos.x, this.pos.z, colliders)) {
+        this.resetStuck();
       }
     }
 
@@ -372,6 +407,31 @@ export class Car {
     this.hp = this.maxHp();
     this.onFire = false;
     this.tireDamage = 0;
+  }
+
+  // Stuck-reset: return to the last known good on-road position, or the
+  // nearest PURSUIT_ROUTE waypoint the car can sit on, or the route
+  // start (60,-140). Every candidate is checked against the colliders
+  // with the car's own radius first, so the reset can never place the
+  // car inside geometry.
+  resetStuck() {
+    const colliders = this.game.city?.colliders || [];
+    const r = this.def.len / 2;
+    let target = null;
+    if (this._lastGood && !circleHitsAnyCollider(this._lastGood.x, this._lastGood.z, r, colliders)) {
+      target = this._lastGood;
+    } else if (colliders.length) {
+      target = nearestRouteWaypoint(this.pos.x, this.pos.z, r, colliders);
+    }
+    if (!target) target = { x: PURSUIT_ROUTE.start[0], z: PURSUIT_ROUTE.start[1] };
+    this.pos.set(target.x, 0, target.z);
+    this.speed = 0;
+    this.slide.set(0, 0, 0);
+    this.vy = 0;
+    this.airborne = false;
+    this.pitch = 0;
+    this._stuckT = 0;
+    this.syncMesh();
   }
 
   remove() {

@@ -130,6 +130,47 @@ function buildGraph() {
 
 export const GRAPH = buildGraph();
 
+// --- PURSUIT_ROUTE: ferry terminal -> Bazaar Quay market (both forks). ---
+// Verified 2026-11-23 by tracing GRAPH + the deterministic city colliders:
+//   * every on-road leg is a real graph edge (Branch A: #56, #57, #47;
+//     Branch B: #56, #46, #60, #47). Ground is 0 along the whole route
+//     with the drawbridge down AND up (bridge span x 232..252 never
+//     overlaps the route, x <= 140). All legs are on land.
+//   * the last leg (120,110) -> (120,125) has NO graph edge: it is a
+//     15 m crossing of open plaza ground, not a road. Its straight line
+//     is BLOCKED for a car: the fruit stand at (120,112) sits dead on
+//     the x=120 line (collider 118.6..121.4 x 111.2..112.8) and market
+//     stall #6 sits on the destination itself (120,125 is inside its
+//     collider 118.5..121.5 x 124.1..125.9). Both branches therefore
+//     finish through the verified-clear gap at x=115 (stalls at x=110
+//     and x=120 leave a 7 m gap; (115,125) is clear for r=2.5).
+//   * (120,110) itself is within car radius (2.5 m) of the fruit stand,
+//     so it is a pass-through turn point, never a reset target for a
+//     car; nearestRouteWaypoint() skips it for cars (clear on foot).
+//   * the shared first leg is NOT clean lane-following: the building at
+//     (72.1,-18.7) puts its collider (x0 61.4) across the northbound
+//     lane x=62.2 for z -29.8..-7.6 (centre-inside trap), and the
+//     building at (47,-41.7) scrapes the southbound lane x=57.8 (edge
+//     56.4, 1.4 m away) for z -53..-30.4. The road stays passable by
+//     steering (one side is always open, >= 6 m clear); the wall-trap
+//     guard + stuck-reset below are what keep a lane-following car
+//     from being trapped there. (Root cause: the city plot guard keeps
+//     plot centres >= 12 m from a road, but a 22 m wide plot reaches
+//     11.5 m from its centre, so its collider can sit 0.5 m from the
+//     centreline. Fixing the guard is city.js generation, out of scope
+//     here; this route documents the intrusions instead.)
+// NOTE on compass: the task calls +z "north"; per the convention in
+// this file (x east, z south) travelling (60,-140) -> (60,110) heads
+// SOUTH (+z, toward the beach). Coordinates below are authoritative.
+export const PURSUIT_ROUTE = {
+  start: [60, -140], // Marina Rd, Coral Marina quay
+  fork: [60, 0], // Marina Blvd junction
+  plaza: [120, 125], // Bazaar Quay market centre (named destination; occupied by stall #6 — see note above)
+  plazaArrival: [115, 125], // verified-clear plaza arrival for cars and on foot
+  branchA: [[60, -140], [60, 0], [60, 110], [120, 110], [115, 110], [115, 125]],
+  branchB: [[60, -140], [60, 0], [140, 0], [140, 110], [120, 110], [115, 110], [115, 125]],
+};
+
 // Point on an edge at parameter t (0..1), on the lane for travel a->b
 // (side +1) or b->a (side -1).
 export function lanePoint(e, t, side) {
@@ -169,6 +210,114 @@ export function nearestRoadPoint(x, z) {
 
 export function randomEdge(rng) {
   return GRAPH.edges[Math.floor(rng() * GRAPH.edges.length)];
+}
+
+// --- Collision: circle vs AABB push-out (wall-trap guard). ---
+// The old code in player.js / vehicle.js pushed a circle out only when
+// its centre was OUTSIDE the box (d2 > 0.0001). When the centre ended
+// up INSIDE a building AABB — driving into it on the lane line, or a
+// spawn/exit landing inside — the closest point was the centre itself,
+// d2 was 0, nothing pushed, and the body stayed trapped inside the
+// wall forever: the Tidebreak wall-trap. These helpers close it:
+// a body walking/driving into a wall slides along it and is never left
+// inside a building. Pure functions (no THREE), so they are unit
+// testable in node; player.js and vehicle.js both call them.
+
+// Resolve a circle (x, z, radius r) against every collider AABB.
+// Returns { x, z, hit }: the corrected centre (fully outside every box)
+// and whether any push-out happened. Centre-inside is pushed out along
+// the smallest penetration axis to the nearest face, plus the radius.
+// Two passes: a push-out from one box can land inside another.
+// EPS (0.1 mm) keeps the resolved circle strictly clear of the box
+// instead of exactly tangent, so a strict overlap test cannot flicker
+// true on floating-point rounding.
+export function resolveCircleVsColliders(x, z, r, colliders) {
+  const EPS = 1e-4;
+  let px = x;
+  let pz = z;
+  let hit = false;
+  for (let pass = 0; pass < 2; pass++) {
+    let moved = false;
+    for (const c of colliders) {
+      const cx = px < c.x0 ? c.x0 : px > c.x1 ? c.x1 : px;
+      const cz = pz < c.z0 ? c.z0 : pz > c.z1 ? c.z1 : pz;
+      const dx = px - cx;
+      const dz = pz - cz;
+      const d2 = dx * dx + dz * dz;
+      if (d2 > 0.0001) {
+        const d = Math.sqrt(d2);
+        if (d < r) {
+          // Push to r + EPS out, not exactly r: strictly clear, so a
+          // strict overlap test cannot flicker true on rounding.
+          const push = (r - d + EPS) / d;
+          px += dx * push;
+          pz += dz * push;
+          hit = true;
+          moved = true;
+        }
+      } else {
+        // Centre inside (or exactly on) the box: no push direction from
+        // the closest point, so push along the smallest penetration axis.
+        const pl = px - c.x0;
+        const pr = c.x1 - px;
+        const pt = pz - c.z0;
+        const pb = c.z1 - pz;
+        const m = Math.min(pl, pr, pt, pb);
+        if (m === pl) px = c.x0 - r - EPS;
+        else if (m === pr) px = c.x1 + r + EPS;
+        else if (m === pt) pz = c.z0 - r - EPS;
+        else pz = c.z1 + r + EPS;
+        hit = true;
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  return { x: px, z: pz, hit };
+}
+
+// True when the point is inside (or exactly on) any collider AABB.
+export function pointInAnyCollider(x, z, colliders) {
+  for (const c of colliders) {
+    if (x >= c.x0 && x <= c.x1 && z >= c.z0 && z <= c.z1) return true;
+  }
+  return false;
+}
+
+// True when a circle of radius r around (x, z) overlaps any collider.
+export function circleHitsAnyCollider(x, z, r, colliders) {
+  for (const c of colliders) {
+    const cx = x < c.x0 ? c.x0 : x > c.x1 ? c.x1 : x;
+    const cz = z < c.z0 ? c.z0 : z > c.z1 ? c.z1 : z;
+    const dx = x - cx;
+    const dz = z - cz;
+    if (dx * dx + dz * dz < r * r) return true;
+  }
+  return false;
+}
+
+// Nearest PURSUIT_ROUTE waypoint to (x, z) that a circle of radius r can
+// actually sit on (no collider overlap). Returns { x, z } or null when
+// every waypoint is blocked for that radius. Used as the stuck-reset
+// fallback when the last good on-road position is lost.
+export function nearestRouteWaypoint(x, z, r, colliders) {
+  const seen = new Set();
+  let best = null;
+  let bestD = Infinity;
+  for (const branch of [PURSUIT_ROUTE.branchA, PURSUIT_ROUTE.branchB]) {
+    for (const [wx, wz] of branch) {
+      const k = wx + ',' + wz;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      if (circleHitsAnyCollider(wx, wz, r, colliders)) continue;
+      const d = (wx - x) * (wx - x) + (wz - z) * (wz - z);
+      if (d < bestD) {
+        bestD = d;
+        best = { x: wx, z: wz };
+      }
+    }
+  }
+  return best;
 }
 
 // Pick the next edge at a node, avoiding an immediate U-turn when possible.

@@ -120,6 +120,67 @@ export function stageYardDensity(game) {
   return countNear(game, 392, -162, 45);
 }
 
+// The waterfront pursuit: civilian traffic on Ocean Drive and a
+// promenade crowd by the Bazaar Quay market stalls reacting to the
+// chase. Modelled on stageCoverDensity / stageYardDensity: the same
+// ped pool (35), the same flee staging (state 'flee', fleeT 3), the
+// same upright/visible reset for peds knocked down earlier in the
+// run. The 'pursuit' shot branch calls this by name.
+// The hero drives east on Ocean Drive (z=108, north side) from (80,108)
+// toward the market plaza (115,125); the stalls run x 70..140 at z=125,
+// so the crowd stands on the promenade (z 116-121), south of the
+// carriageway and on land — never on the road, never in the hero's path.
+// The spots sit EAST of the chase camera (x ~112), so the fleeing peds
+// read in the frame ahead of the hero, not behind the lens.
+export function stagePursuitCrowd(game) {
+  const g = game;
+  // Six civilian cars pulled onto Ocean Drive near the pursuit.
+  // placeNear keeps them driving on the lane graph; with stars up,
+  // traffic.update flees them away from the player at 1.6x speed.
+  const cars = g.traffic.placeNear(100, 110, 6);
+  // Twelve pedestrians on the promenade: six bolt from the pursuit,
+  // six keep walking.
+  const pedSpots = [
+    { x: 120, z: 117, flee: true },
+    { x: 124, z: 119, flee: true },
+    { x: 127, z: 116, flee: true },
+    { x: 130, z: 120, flee: true },
+    { x: 133, z: 117, flee: true },
+    { x: 136, z: 119, flee: true },
+    { x: 122, z: 120, flee: false },
+    { x: 126, z: 118, flee: false },
+    { x: 129, z: 121, flee: false },
+    { x: 132, z: 116, flee: false },
+    { x: 135, z: 121, flee: false },
+    { x: 138, z: 118, flee: false },
+  ];
+  let stagedPeds = 0;
+  let fleeing = 0;
+  pedSpots.forEach((s, i) => {
+    const p = g.peds.peds[i];
+    if (!p) return;
+    p.pos.set(s.x, 0, s.z);
+    p.mesh.position.set(s.x, 0, s.z);
+    // A ped staged here may have been knocked down during the run's
+    // drives — reset the mesh upright, or it renders lying flat while
+    // fleeing (the flee branch only sets rotation.y).
+    p.mesh.rotation.set(0, p.heading, 0);
+    p.mesh.position.y = 0;
+    p.mesh.visible = true;
+    if (s.flee) {
+      p.state = 'flee';
+      p.fleeT = 3;
+      fleeing++;
+    } else {
+      p.state = 'walk';
+      p.idle = 0;
+    }
+    stagedPeds++;
+  });
+  const d = countNear(game, 100, 112, 40);
+  return { vehicles: d.vehicles, peds: d.peds, stagedCars: cars, stagedPeds, fleeing };
+}
+
 // Vehicles + pedestrians within radius r of (x, z): the state dump's
 // density count. Counts traffic cars, police units, yard vehicles,
 // the starter car and the player's car, plus every ped.

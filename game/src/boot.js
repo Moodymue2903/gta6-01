@@ -29,7 +29,12 @@ import { PopulationDirector } from './world/populationDirector.js';
 import { buildHarbourLandmarks } from './world/harbourLandmarks.js';
 import { buildRoyalPalms } from './world/palmTrees.js';
 import { buildWaterSurface } from './world/waterSurface.js';
-import { HUD } from './ui/hudV2.js';
+// FIX ROUND 8 (Builder B) — sunset atmosphere + wet causeway +
+// harbour skyline. Minimal additive hooks: one import + one call each.
+import { installAtmosphere } from './look/sunsetAtmosphere.js';
+import { buildWetCauseway } from './look/wetCauseway.js';
+import { buildHarborSkyline } from './look/harborSkyline.js';
+import { HUD } from './ui/hudV3.js';
 import { Menus } from './ui/menus.js';
 import { Input } from './input.js';
 import { CameraCtl } from './camera.js';
@@ -72,6 +77,9 @@ class Game {
     this.camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 2500);
 
     this.lighting = buildLighting(this.scene);
+    // FIX ROUND 8 (Builder B): sunset atmosphere owns the envMap +
+    // light rig (PMREM once at boot, low sun, 4-stop sky, FogExp2).
+    this.atmosphere = installAtmosphere(this.scene, this.renderer, this.lighting);
     this.city = buildCity(this.scene, this.rng, this);
     // FIX ROUND 7 — harbour identity: copper tidal gate, royal palms,
     // animated water. Built right after the city so the landmarks sit
@@ -79,6 +87,9 @@ class Game {
     this.landmarks = buildHarbourLandmarks(this);
     this.palms2 = buildRoyalPalms(this);
     this.water = buildWaterSurface(this);
+    // FIX ROUND 8 (Builder B): wet causeway + harbour skyline.
+    this.wet = buildWetCauseway(this);
+    this.harbor = buildHarborSkyline(this);
     this.timeScale = 1;
     this.roads = { nearestRoadPoint };
     this.input = new Input();
@@ -197,6 +208,9 @@ class Game {
     this.radio.update(dt);
     this.city.update(dt, this.time);
     this.water.update(dt);
+    // FIX ROUND 8 (Builder B): spray / flares + ocean / heli.
+    this.wet.update(dt);
+    this.harbor.update(dt);
     this.audio.update(dt);
     const focus = player.inCar ? player.inCar.pos : player.pos;
     this.lighting.update(dt, this.time, focus);

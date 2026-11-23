@@ -86,7 +86,12 @@ export function stageRun(game) {
 
   // Three stunt leaps on the causeway in the run car. The first pass
   // also collects the three causeway flares (Contraband 3/10).
-  const runCar = new Car(g, 'sports', 0xff7a55, 290, 0, -Math.PI / 2);
+  // FIX (pale car in the garage): the run car was painted 0xff7a55
+  // (light salmon) — HERO_PAINT 0xe85a24 was defined but never used,
+  // so the "vermilion" car was salmon in every shot and read pale
+  // peach/cream under the dusk light. The car is the VERMILION GT:
+  // paint it the real vermilion.
+  const runCar = new Car(g, 'sports', 0xe85a24, 290, 0, -Math.PI / 2);
   runCar.speed = 30;
   g.player.enterCar(runCar);
   for (let pass = 0; pass < 3; pass++) {

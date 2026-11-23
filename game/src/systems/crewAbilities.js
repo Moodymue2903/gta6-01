@@ -1,12 +1,12 @@
 // VERMILION KEYS — crew abilities (FIX ROUND 7).
 // Activation feedback + the one extra effect on top of progression.js.
-// useCrew() in progression.js ALREADY does the real work — Mira drops
+// useCrew() in progression.js ALREADY does the real work — Zia drops
 // heat 22 and recomputes stars, Lo repairs the car and heals 25, Kiki
 // sets revealUntil = time + 20 — so this module NEVER re-implements
 // those effects and never writes crewUsed. It only OBSERVES
 // progression.crewUsed timestamps, detects a fresh use, records the
 // activation for the HUD, and adds the one effect progression.js does
-// not have: Mira's Driver's Cut, a +25% top-speed boost for 8 s.
+// not have: Zia's Driver's Cut, a +25% top-speed boost for 8 s.
 // The coordinator wires Car.update to read speedBoostActive() (and
 // multiply top speed by 1.25 while it is live).
 
@@ -59,7 +59,7 @@ export class CrewAbilities {
   _onCrewUsed(id, at) {
     this.lastActivation = { id, time: at };
     if (id === 'mira') {
-      // Driver's Cut: +25% top speed for 8 s, on top of Mira's
+      // Driver's Cut: +25% top speed for 8 s, on top of Zia's
       // plate-swap (already applied by progression.useCrew).
       this.boostUntil = this.game.time + BOOST_SECONDS;
     }

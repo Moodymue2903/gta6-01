@@ -328,7 +328,7 @@ class Game {
       // FIX ROUND 5 — the career ledger counts the steal. (Pre-existing
       // gap: traffic.steal never recorded it, so Cars Stolen stayed 0.)
       this.progression.recordCarStolen();
-      this.hud.showDialogue('Mira', 'DRIVER', 'Nice — that one is yours now. Lose the heat!');
+      this.hud.showDialogue('Zia', 'DRIVER', 'Nice — that one is yours now. Lose the heat!');
       this.audio.blip('mission');
     }
     this.player.enterCar(car);
@@ -346,7 +346,7 @@ class Game {
     this.state = 'playing';
     this.audio.init();
     this.audio.resume();
-    this.hud.showDialogue('Mira', 'DRIVER', 'Welcome back to the Keys. Gold marker at the safehouse starts the next job.');
+    this.hud.showDialogue('Zia', 'DRIVER', 'Welcome back to the Keys. Gold marker at the safehouse starts the next job.');
   }
 
   die() {

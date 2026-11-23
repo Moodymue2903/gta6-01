@@ -34,7 +34,7 @@ export class Menus {
     this.titleEl = document.createElement('div');
     this.titleEl.id = 'title-screen';
     this.titleEl.innerHTML = `
-      <div class="t-kicker">MAKE.FUN · GTA 6 BOUNTY</div>
+      <div class="t-kicker">MAKE.FUN · OPEN-WORLD BOUNTY</div>
       <h1>VERMILION<br>KEYS</h1>
       <div class="t-sub">An open-world crime game at golden hour — steal, race, leap.</div>
       <div class="t-controls">

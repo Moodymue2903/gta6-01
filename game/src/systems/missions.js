@@ -20,7 +20,7 @@ import { districtAt } from '../world/cityLayout.js';
 
 export const MISSIONS = [
   {
-    id: 1, name: 'BAGMAN', giver: 'Mira', giverRole: 'DRIVER',
+    id: 1, name: 'BAGMAN', giver: 'Zia', giverRole: 'DRIVER',
     briefing: 'First job, runner. Pick up the package at the marina and bring it to the safehouse. No cops, no noise.',
     reward: 800, respect: 60, par: 240,
     stages: [
@@ -47,7 +47,7 @@ export const MISSIONS = [
     ],
   },
   {
-    id: 4, name: 'DOCKSIDE', giver: 'Mira', giverRole: 'DRIVER',
+    id: 4, name: 'DOCKSIDE', giver: 'Zia', giverRole: 'DRIVER',
     briefing: 'A container truck at the port is carrying syndicate cash. Steal it, bring it to the garage. The PD will notice.',
     reward: 2000, respect: 110, par: 360,
     stages: [
@@ -74,7 +74,7 @@ export const MISSIONS = [
     ],
   },
   {
-    id: 7, name: 'GRAND PRIX', giver: 'Mira', giverRole: 'DRIVER',
+    id: 7, name: 'GRAND PRIX', giver: 'Zia', giverRole: 'DRIVER',
     briefing: 'Street race, eight gates, three rivals, one pot. Beat the clock and beat them. No shortcuts — the gates are the route.',
     reward: 3000, respect: 160, par: 300,
     stages: [

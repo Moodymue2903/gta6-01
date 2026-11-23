@@ -35,7 +35,11 @@ function el(tag, id, parent, html = '') {
 }
 
 const HUDV3_CSS = `
-#hv3-mission { position: absolute; top: 12px; left: 12px; width: 300px;
+#hv3-left  { position: absolute; top: 12px; left: 12px; width: 300px;
+  display: flex; flex-direction: column; gap: 8px; }
+#hv3-right { position: absolute; top: 12px; right: 12px; width: 250px;
+  display: flex; flex-direction: column; gap: 8px; }
+#hv3-mission { width: 100%; box-sizing: border-box;
   background: linear-gradient(135deg, rgba(40, 22, 30, 0.82), rgba(70, 34, 30, 0.7)); border: 1.5px solid rgba(251, 191, 36, .55);
   border-left: 3px solid #f2a33a; border-radius: 6px; padding: 8px 12px; }
 #hv3-mission .m-job { color: #fbbf24; font-weight: 800; letter-spacing: 1px; font-size: 13px; }
@@ -43,7 +47,7 @@ const HUDV3_CSS = `
 #hv3-mission .m-stage { color: #9fd8dd; font-size: 13px; letter-spacing: .5px; }
 #hv3-mission .m-pips { color: #9fd8dd; font-size: 12px; letter-spacing: 3px; }
 #hv3-mission .m-next { color: #ffc27a; font-size: 14px; font-weight: 700; letter-spacing: .5px; margin-top: 2px; }
-#hv3-roster { position: absolute; top: 116px; left: 12px; width: 300px; display: none;
+#hv3-roster { width: 100%; box-sizing: border-box; display: none;
   background: linear-gradient(135deg, rgba(40, 22, 30, 0.82), rgba(70, 34, 30, 0.7)); border: 1.5px solid rgba(239, 68, 68, .45);
   border-left: 3px solid #f2a33a; border-radius: 6px; padding: 7px 12px; }
 #hv3-roster.show { display: block; }
@@ -61,7 +65,7 @@ const HUDV3_CSS = `
 #hv3-wanted.grey .w-stars .star.on { color: #9aa0a6; }
 #hv3-wanted .w-state { font-size: 12px; letter-spacing: 2px; color: #fbbf24; font-weight: 800;
   text-shadow: 0 1px 3px rgba(0,0,0,.9); margin-top: 2px; }
-#hv3-cash { position: absolute; top: 12px; right: 12px; width: 210px; text-align: right;
+#hv3-cash { width: 100%; box-sizing: border-box; text-align: right;
   background: linear-gradient(135deg, rgba(40, 22, 30, 0.82), rgba(70, 34, 30, 0.7)); border: 1.5px solid rgba(255, 194, 122, .45);
   border-left: 3px solid #f2a33a; border-radius: 6px; padding: 8px 12px; }
 #hv3-cash .cash { font-size: 24px; font-weight: 800; color: #ffd9a0; }
@@ -75,7 +79,7 @@ const HUDV3_CSS = `
    legible at thumbnail size — the name and state are bold and larger
    than the ability line, per the re-test 13 judges. The panel sits
    under the cash box on the right edge, clear of the weapon chip. */
-#hv3-crew { position: absolute; right: 12px; top: 116px; width: 250px;
+#hv3-crew { width: 100%;
   display: flex; flex-direction: column; gap: 8px; }
 #hv3-crew .cm { display: flex; align-items: center; gap: 9px; text-align: left;
   background: linear-gradient(135deg, rgba(40, 22, 30, 0.82), rgba(70, 34, 30, 0.7));
@@ -156,15 +160,17 @@ export class HUDV3 {
     }
     const hud = document.getElementById('hud');
     this.root = hud;
-    this.missionCard = el('div', 'hv3-mission', hud);
-    this.roster = el('div', 'hv3-roster', hud);
+    this.leftCol = el('div', 'hv3-left', hud);
+    this.missionCard = el('div', 'hv3-mission', this.leftCol);
+    this.roster = el('div', 'hv3-roster', this.leftCol);
     this.wanted = el('div', 'hv3-wanted', hud, '<span class="w-stars"></span><div class="w-state"></div>');
-    this.cashBox = el('div', 'hv3-cash', hud);
+    this.rightCol = el('div', 'hv3-right', hud);
+    this.cashBox = el('div', 'hv3-cash', this.rightCol);
     this.minimapWrap = el('div', 'hv3-minimap-wrap', hud);
     this.minimap = el('canvas', 'hv3-minimap', this.minimapWrap);
     this.minimap.width = 160;
     this.minimap.height = 160;
-    this.crewEl = el('div', 'hv3-crew', hud);
+    this.crewEl = el('div', 'hv3-crew', this.rightCol);
     this.weaponChip = el('div', 'hv3-weapon', hud);
     this.speedBox = el('div', 'hv3-speed', hud);
     this.tickerEl = el('div', 'hv3-scanner', hud);
@@ -197,7 +203,7 @@ export class HUDV3 {
       this.dialogue.innerHTML = '';
       return;
     }
-    const COLORS = { Kiki: '#2e9e5b', Mira: '#c78a1a', Lo: '#2b7fb8', Marco: '#c23b2a' };
+    const COLORS = { Kiki: '#2e9e5b', Zia: '#c78a1a', Lo: '#2b7fb8', Marco: '#c23b2a' };
     const color = COLORS[card.speaker] || '#7a6a8a';
     const initials = card.speaker.slice(0, 2).toUpperCase();
     this.dialogue.innerHTML =

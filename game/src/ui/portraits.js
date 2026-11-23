@@ -4,7 +4,7 @@
 // tone and hair colour from fixed palettes, so the same speaker always
 // gets the same face. Each named speaker also gets one distinguishing
 // item, readable at ~40 px: Marco a dark suit collar with a gold
-// chain, Mira a driver headband, Kiki a lookout cap, Lo a mechanic
+// chain, Zia a driver headband, Kiki a lookout cap, Lo a mechanic
 // cap. Unknown names get the generic face with no item. Everything is
 // inline SVG — no assets, no network.
 
@@ -35,7 +35,7 @@ function itemSVG(name, skin, hair) {
       '<path d="M22 48 Q32 60 42 48" fill="none" stroke="#fbbf24" stroke-width="2.5"/>'
     );
   }
-  if (name === 'Mira') {
+  if (name === 'Zia') {
     // Driver headband — a vermilion band across the forehead.
     return '<path d="M18 26 Q32 18 46 26 L46 30 Q32 23 18 30 Z" fill="#ff6a4a"/>';
   }

@@ -186,7 +186,7 @@ export class Car {
   // Effective stats with the garage tune applied.
   topSpeed() {
     let top = this.def.topSpeed * (1 + 0.08 * (this.tune.engine || 0));
-    // FIX ROUND 7 — Mira's Driver's Cut: +25% top speed for 8 s, on
+    // FIX ROUND 7 — Zia's Driver's Cut: +25% top speed for 8 s, on
     // the player's car only (traffic/police cars never get the boost).
     if (this.game.player.inCar === this && this.game.crewAbilities?.speedBoostActive()) {
       top *= this.game.crewAbilities.boostMultiplier;

@@ -68,11 +68,11 @@ export class WeaponWheel {
       fontFamily: "'Arial Narrow', Arial, sans-serif",
     });
     this.root.innerHTML =
-      '<div style="position:absolute;left:50%;top:50%;width:120px;height:120px;transform:translate(-50%,-50%);border-radius:50%;background:rgba(11,17,32,0.88);border:2px solid #fbbf24;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#f5d9a0;">' +
+      '<div style="position:absolute;left:50%;top:50%;width:136px;height:136px;transform:translate(-50%,-50%);border-radius:50%;background:rgba(11,17,32,0.88);border:2px solid #fbbf24;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#f5d9a0;">' +
       '<span style="font-size:11px;letter-spacing:2px;color:#14a0b8;">WEAPON</span>' +
       '<span class="ww-center-name" style="font-size:20px;font-weight:bold;letter-spacing:1px;"></span>' +
       '<span class="ww-center-ammo" style="font-size:14px;color:#fff;"></span>' +
-      '<span style="font-size:10px;letter-spacing:1px;color:#aaa;">RELEASE Q TO EQUIP</span></div>';
+      '<span style="font-size:9px;letter-spacing:0.5px;color:#aaa;white-space:nowrap;">RELEASE Q<br>TO EQUIP</span></div>';
     this._slotEls = WEAPONS.map((w, i) => {
       const a = (SLOT_ANGLES[i] * Math.PI) / 180;
       const r = 128;

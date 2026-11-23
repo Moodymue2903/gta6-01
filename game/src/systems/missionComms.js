@@ -20,7 +20,7 @@ const CARD_SECONDS = 6;
 // Speaker -> role, matching the roles progression.js / missions.js use.
 const ROLES = {
   Marco: 'SYNDICATE',
-  Mira: 'DRIVER',
+  Zia: 'DRIVER',
   Lo: 'MECHANIC',
   Kiki: 'LOOKOUT',
 };
@@ -30,26 +30,26 @@ const ROLES = {
 // closest to that leg of the job. Lines quote the stage objective
 // rather than inventing new goals.
 const LINES = {
-  // 1 BAGMAN — Mira: marina pickup, then the safehouse run.
-  '1,0': { speaker: 'Mira', line: 'Package is at the marina, runner. Quiet streets, no cops, no noise — that is the whole job.' },
-  '1,1': { speaker: 'Mira', line: 'You have it. Now the safehouse, same speed. Do not let a patrol get curious.' },
+  // 1 BAGMAN — Zia: marina pickup, then the safehouse run.
+  '1,0': { speaker: 'Zia', line: 'Package is at the marina, runner. Quiet streets, no cops, no noise — that is the whole job.' },
+  '1,1': { speaker: 'Zia', line: 'You have it. Now the safehouse, same speed. Do not let a patrol get curious.' },
   // 2 HOT WHEELS — Lo: the courier chase, then the case.
   '2,0': { speaker: 'Lo', line: 'There he is — the gold muscle car, running product downtown. Ram him till he stops!' },
   '2,1': { speaker: 'Lo', line: 'He is done. Grab the case from the wreck before his friends arrive.' },
   // 3 LOSE THE HEAT — Kiki: break line of sight, then the hideout.
   '3,0': { speaker: 'Kiki', line: 'Every unit in the Keys is on you. Break line of sight — alleys, garages, anywhere they cannot see you.' },
   '3,1': { speaker: 'Kiki', line: 'Heat is dying. Slip to the hospital hideout and stay out of sight till it is gone.' },
-  // 4 DOCKSIDE — Mira: the truck, then the run to the garage.
-  '4,0': { speaker: 'Mira', line: 'Container truck at the port, syndicate cash inside. Take it clean and the PD never has to know.' },
-  '4,1': { speaker: 'Mira', line: 'You have the truck — now drive it to the garage and stay alive. They will notice. They always notice.' },
+  // 4 DOCKSIDE — Zia: the truck, then the run to the garage.
+  '4,0': { speaker: 'Zia', line: 'Container truck at the port, syndicate cash inside. Take it clean and the PD never has to know.' },
+  '4,1': { speaker: 'Zia', line: 'You have the truck — now drive it to the garage and stay alive. They will notice. They always notice.' },
   // 5 YARD AMBUSH — Kiki: six guards in the container yard, then the package.
   '5,0': { speaker: 'Kiki', line: 'Six guards in the yard, and they are not here to talk. Clear them, then the package is yours.' },
   '5,1': { speaker: 'Kiki', line: 'Yard is quiet. Secure the package — the PD heard the shots, so do not linger.' },
   // 6 RIVAL DOWN — Lo: the old-town meet, then the rival.
   '6,0': { speaker: 'Lo', line: 'The hitter is waiting in the old town. Get there in one piece — he has friends on every corner.' },
   '6,1': { speaker: 'Lo', line: 'That is him. Put him down — drive-by or on foot, your call. Make it stick.' },
-  // 7 GRAND PRIX — Mira: eight gates, three rivals.
-  '7,0': { speaker: 'Mira', line: 'Eight gates, three rivals, one pot. Beat the clock and beat them. No shortcuts — the gates are the route.' },
+  // 7 GRAND PRIX — Zia: eight gates, three rivals.
+  '7,0': { speaker: 'Zia', line: 'Eight gates, three rivals, one pot. Beat the clock and beat them. No shortcuts — the gates are the route.' },
   // 8 KINGPIN — Marco: the syndicate cars, the escape, the drawbridge leap.
   '8,0': { speaker: 'Marco', line: 'Last job. Hit the syndicate cars at the port — all three — and do not stop for the smoke.' },
   '8,1': { speaker: 'Marco', line: 'The Keys PD is coming down on you now. Lose them. Then the drawbridge — it is up, so you leap it.' },

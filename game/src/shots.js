@@ -41,6 +41,13 @@
 //      with patrol units + heli in pursuit, civilian traffic ahead,
 //      promenade peds bolting, the low rear chase camera. Route + wanted
 //      level stay on the HUD (the HUD is left on for this frame).
+//   6. onfoot — ON FOOT AT THE WATERFRONT MARKET (supporting milestone
+//      frame, NOT one of the 4 packaged screenshots): the player out of
+//      the car at the market plaza, pedestrians around, a contact at the
+//      stall and the market objective on the HUD — evidence of
+//      exploration beyond driving, with the harbour on a clearer angle.
+//      The parked run car stays at the kerb behind the player; the
+//      camera is combatPose, the established on-foot third-person chase.
 // The cover frame shows dialogue (Marco's KINGPIN line, pinned by
 // missionComms); the other frames clear it, so they read as pictures,
 // not chat logs.
@@ -711,6 +718,227 @@ export function stageShot(kind, game) {
     g.camera.fov = pursuitCam.fov;
     g.camera.updateProjectionMatrix();
     g.cameraCtl.update(0, g.input);
+  } else if (kind === 'onfoot') {
+    // ON FOOT AT THE WATERFRONT MARKET (Codex direction 2026-11-23):
+    // the player OUT of the car at the market, pedestrians around and
+    // a visible mission interaction — evidence of exploration beyond
+    // driving, with the harbour on a clearer angle. Day light is the
+    // primary look (applyMidday, never applyGolden). This is a
+    // SUPPORTING milestone frame for the issue review, not one of the
+    // 4 packaged screenshots: it is captured with the shot driver as
+    // milestones/on-foot-market.jpg and never enters shots.json.
+    // Staging reuses the pursuit run up to the freeze: the same
+    // KINGPIN run drives east to the market, then the player steps
+    // out and the car stays parked at the kerb. The camera is
+    // combatPose — the established on-foot third-person chase from
+    // cinematicCamera.js, computed from the live player pose; no new
+    // camera mode is invented.
+    applyMidday(g);
+    const { runCar } = stageRun(g);
+    // 5 stars, patrol units + heli: the full pursuit on the chase.
+    g.police.addHeat(95, 'onfoot staging');
+    // Mission interaction: the same market objective shape the
+    // pursuit stages — a 'goto' stage at the market plaza, so the
+    // minimap draws its gold route and the objective card reads.
+    // The stage text names the contact, so the frame reads as a
+    // meeting, not a drive-by. The stage never completes during
+    // staging: radius 6, and the hero's closest approach to (115,125)
+    // is ~17 m in the car; after the player steps out no sim ticks
+    // run, so update() can neither fail nor advance it.
+    g.missions.active = {
+      def: {
+        id: 8, name: 'KINGPIN', giver: 'Marco', giverRole: 'SYNDICATE',
+        briefing: 'Last job. Meet the contact at the market stall — on foot, no noise.',
+        reward: 5000, respect: 220, par: 420,
+        stages: [{ type: 'goto', text: 'Meet the contact at the market stall', x: 115, z: 125, radius: 6 }],
+      },
+      stage: 0, timer: 0, totalTimer: 0, gate: 0, kills: 0,
+      chaseCar: null, targets: [], guards: [], data: {},
+    };
+    // Civilian traffic + promenade crowd via the pursuit density
+    // helper (same pattern as the pursuit branch): 6 cars pulled onto
+    // Ocean Drive near the market, 12 peds on the promenade — six
+    // bolting from the pursuit, six walking.
+    const crowd = stagePursuitCrowd(g);
+    console.log('[onfoot-crowd] vehicles=' + crowd.vehicles + ' peds=' + crowd.peds + ' stagedCars=' + crowd.stagedCars + ' stagedPeds=' + crowd.stagedPeds + ' fleeing=' + crowd.fleeing);
+    // Hero: the run car, grounded on Ocean Drive at (80,108), eastbound.
+    runCar.pos.set(80, 0, 108);
+    runCar.heading = Math.PI / 2;
+    runCar.speed = 30;
+    runCar.airborne = false;
+    runCar.vy = 0;
+    runCar.pitch = 0;
+    runCar.syncMesh();
+    g.player.pos.set(80, 0, 108);
+    // Drive east with the real car controller, up to ~90 ticks (1.5 s),
+    // breaking at the frame mark (x >= 118, near the market).
+    g.scriptedDrive = { throttle: 1, steer: 0, handbrake: false };
+    for (let i = 0; i < 90; i++) {
+      g.stepSim(1 / 60);
+      if (runCar.pos.x >= 118) break;
+    }
+    g.scriptedDrive = null;
+    // Freeze the car PARKED at the kerb at (118, 0, 108): y = 0 is the
+    // flat road surface, pitch 0, airborne false, vy 0, speed 0 — the
+    // getaway car the player just stepped out of. Heading keeps the
+    // slight drift angle, so the parked car still reads as the run car.
+    runCar.pos.set(118, 0, 108);
+    runCar.airborne = false;
+    runCar.vy = 0;
+    runCar.heading = Math.PI / 2 + 0.35;
+    runCar.speed = 0;
+    runCar.pitch = 0;
+    runCar.syncMesh();
+    g.player.pos.set(runCar.pos.x, runCar.pos.y, runCar.pos.z);
+    // The contact shadow sits on the road surface under the parked car.
+    g.heroBlob.position.set(runCar.pos.x, runCar.pos.y + 0.06, runCar.pos.z);
+    g.heroBlob.scale.set(4.3 * 0.62, 2.0 * 0.75, 1);
+    g.heroBlob.material.opacity = 0.25;
+    console.log('[onfoot-hero] car parked pos=' + runCar.pos.x.toFixed(1) + ',' + runCar.pos.y.toFixed(1) + ',' + runCar.pos.z.toFixed(1) + ' speed=' + runCar.speed.toFixed(1));
+    // The player ON FOOT at the port gap (190, 122): east along the
+    // waterfront promenade from the market, where the harbour
+    // sightline clears (probe: ship + dock crane in frame and the
+    // 2D sightline clear of building colliders at x=190; the raycast
+    // hits a distant thin obstruction, so the ship still reads).
+    // Heading 165 deg (north-north-east) toward the harbour.
+    // spawn() puts the player out of the car, mesh visible, on foot.
+    g.player.spawn(190, 122, 165 * Math.PI / 180);
+    console.log('[onfoot-player] player pos=' + g.player.pos.x.toFixed(1) + ',' + g.player.pos.y.toFixed(1) + ',' + g.player.pos.z.toFixed(1) + ' heading=' + g.player.heading.toFixed(2) + ' inCar=' + (g.player.inCar !== null));
+    // The CONTACT at the market stall: peds[12], staged AHEAD of the
+    // player (player + fwd*7 + right*1.5), facing the player, in a
+    // bright yellow shirt (the combat branch's witness precedent),
+    // so the meeting reads at frame scale. Attempt 1 put the contact
+    // at (116, 123.8), ~47 deg off the view axis and out of frame;
+    // this puts them in the frame ahead of the player. No sim ticks
+    // run after this, so the contact holds the pose.
+    const contact = g.peds.peds[12];
+    if (contact) {
+      const ch = g.player.heading;
+      const cfx = Math.sin(ch), cfz = Math.cos(ch);
+      const crx = Math.cos(ch), crz = -Math.sin(ch);
+      const cx = g.player.pos.x + cfx * 7 + crx * 1.5;
+      const cz = g.player.pos.z + cfz * 7 + crz * 1.5;
+      contact.pos.set(cx, 0, cz);
+      contact.mesh.position.set(cx, 0, cz);
+      contact.heading = Math.atan2(g.player.pos.x - cx, g.player.pos.z - cz);
+      contact.mesh.rotation.set(0, contact.heading, 0);
+      contact.mesh.position.y = 0;
+      contact.mesh.visible = true;
+      contact.state = 'walk';
+      contact.idle = 0;
+      // Yellow shirt: the torso mesh lives in the character rig
+      // (contact.mesh.userData.rig.joints.torso). contact.mesh.children[0]
+      // is the pelvis Group, so assigning .material to it does nothing
+      // (attempt 2: the contact rendered in its random shirt, not yellow).
+      // Recolour the torso's own meshes — direct children only, so the
+      // neck/head subtree and the phone are left alone. Same pattern as
+      // Pedestrians.downBody (FIX ROUND 4).
+      const yellow = new THREE.MeshLambertMaterial({ color: 0xe8c93a });
+      const rig = contact.mesh.userData && contact.mesh.userData.rig;
+      const torso = rig && rig.joints && rig.joints.torso;
+      if (torso) {
+        for (const o of torso.children) {
+          if (o.isMesh && o !== contact.mesh.userData.phone) o.material = yellow;
+        }
+      } else {
+        const body = contact.mesh.children[0];
+        if (body) body.material = yellow;
+      }
+    }
+    // Promenade peds near the player at the port gap: the
+    // stagePursuitCrowd peds stay at the market (x 120-138), too far
+    // west to read in this frame, so re-stage six of the spare peds
+    // (indices 13-18, scattered randomly) onto the promenade around
+    // the player — walking, upright, visible. No sim ticks run after
+    // this, so they hold their poses.
+    const portGapPeds = [
+      { x: 196, z: 116 }, { x: 193, z: 112 }, { x: 188, z: 110 },
+      { x: 200, z: 118 }, { x: 185, z: 117 }, { x: 197, z: 108 },
+    ];
+    portGapPeds.forEach((s, i) => {
+      const p = g.peds.peds[13 + i];
+      if (!p) return;
+      p.pos.set(s.x, 0, s.z);
+      p.mesh.position.set(s.x, 0, s.z);
+      p.mesh.rotation.set(0, p.heading, 0);
+      p.mesh.position.y = 0;
+      p.mesh.visible = true;
+      p.state = 'walk';
+      p.idle = 0;
+    });
+    // Interceptor MID-TURN across the route (REV1 staging, same as the
+    // pursuit branch): at (129,110), heading 0.70 rad, light bar
+    // steady — the responding police in frame ahead of the market.
+    const interceptor = new Car(g, 'sedan', 0xf2f2f2, 129, 110, 0.70, true);
+    interceptor.unit = { name: 'VKPD-12', state: 'pursue', kind: 'cruiser', blockTarget: null, ramCooldown: 0, lightBarSteady: true };
+    interceptor.speed = 25;
+    interceptor.syncMesh();
+    g.police.units.push(interceptor);
+    // The beacon is a 26 m gold column over the market — at the frame's
+    // edge it would read as a UI sliver, not a destination. Hide it
+    // (and the ground marker) for this shot, as the pursuit branch
+    // does; the minimap keeps the gold route and the gold target
+    // diamond, so the objective still reads.
+    g.missions.beacon.visible = false;
+    g.missions.marker.visible = false;
+    // Camera (computed BEFORE the de-conflict, so the keep-out uses the
+    // real lens position): combatPose, the established on-foot
+    // third-person chase from the live player pose — ~2.5 m behind,
+    // 0.6 m right, 1.6 m up, looking 20 m ahead, FOV 64.
+    const onfootCam = combatPose(g.player);
+    console.log('[onfoot-cam] player=' + g.player.pos.x.toFixed(1) + ',' + g.player.pos.y.toFixed(1) + ',' + g.player.pos.z.toFixed(1) +
+      ' heading=' + g.player.heading.toFixed(2) +
+      ' cam=' + onfootCam.pos.x.toFixed(1) + ',' + onfootCam.pos.y.toFixed(1) + ',' + onfootCam.pos.z.toFixed(1) +
+      ' fov=' + onfootCam.fov.toFixed(1));
+    // De-conflict: the loop's traffic and converging units can end up
+    // ON the player or on the camera ray. Anything within 7 m of the
+    // player, or within 5 m of the camera, is moved west onto Ocean
+    // Drive behind the camera — still in the world, still on the
+    // roster, still pursuing, no longer sitting on the player or
+    // blocking the lens.
+    {
+      const camPos = onfootCam.pos;
+      const clearOf = (x, z) =>
+        Math.hypot(x - g.player.pos.x, z - g.player.pos.z) > 7 &&
+        Math.hypot(x - camPos.x, z - camPos.z) > 5;
+      for (const c of g.traffic.cars) {
+        if (!clearOf(c.pos.x, c.pos.z)) {
+          c.pos.set(88, 0, c.pos.z < 110 ? 107.8 : 112.2);
+          c.syncMesh();
+        }
+      }
+      for (const u of g.police.units) {
+        if (u === interceptor) continue;
+        if (!clearOf(u.pos.x, u.pos.z)) {
+          u.pos.set(88, 0, u.pos.z < 110 ? 107.8 : 112.2);
+          u.syncMesh();
+        }
+      }
+    }
+    // Compose the helicopter: ahead-east and north of the car, high, in
+    // frame, its cone falling diagonally onto the market. Restrained beam
+    // (the cover's restrained opacities — in daylight the beam is
+    // subtle, and it must support the chase, not overwhelm it).
+    if (g.police.heli) {
+      const hp = g.police.heli;
+      // Above the player at the port gap (not the parked car 70 m
+      // west), so the heli stays in frame over the meeting.
+      hp.mesh.position.set(g.player.pos.x + 18, 16, g.player.pos.z - 16);
+      hp.mesh.lookAt(g.player.pos.x, 0, g.player.pos.z);
+      hp.pool.position.set(g.player.pos.x, 0.15, g.player.pos.z);
+      const ud = hp.mesh.userData;
+      if (ud.cone) ud.cone.material.opacity = 0.08;
+      if (ud.coneOuter) ud.coneOuter.material.opacity = 0.02;
+      if (ud.hotspot) ud.hotspot.scale.set(3.0, 3.0, 1);
+      if (hp.pool) hp.pool.material.opacity = 0.12;
+    }
+    g.cameraCtl.setShotPose(
+      [onfootCam.pos.x, onfootCam.pos.y, onfootCam.pos.z],
+      [onfootCam.lookAt.x, onfootCam.lookAt.y, onfootCam.lookAt.z],
+    );
+    g.camera.fov = onfootCam.fov;
+    g.camera.updateProjectionMatrix();
+    g.cameraCtl.update(0, g.input);
   } else if (kind === 'combat') {
     // YARD AMBUSH: JOB 5 in the container yard at midday (12:30, blue
     // sky, bright colour-blocked containers). The same run at JOB 5:
@@ -992,6 +1220,7 @@ export function stageShot(kind, game) {
     kind === 'cover' ? { x: 250, z: 0, r: 60 }
     : kind === 'drive' ? { x: 250, z: 0, r: 60 }
     : kind === 'pursuit' ? { x: 100, z: 110, r: 60 }
+    : kind === 'onfoot' ? { x: 112, z: 122, r: 60 }
     : kind === 'combat' ? { x: 392, z: -162, r: 45 }
     : kind === 'career' ? { x: 0, z: 0, r: 260 }
     : { x: 52, z: 128, r: 45 };

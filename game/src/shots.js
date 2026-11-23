@@ -70,7 +70,8 @@ import { coverPose, combatPose, garagePose } from './look/cinematicCamera.js';
 // MAP SHOT (C1 fix, 2026-11-23) — the baked minimap tile + district
 // data, reused full-screen; no new map renderer is invented.
 import { bakeMinimap } from './ui/minimapBaked.js';
-import { districtRects, MAP_MARKERS } from './world/cityLayout.js';
+import { districtRects, islandRects, MAP_MARKERS } from './world/cityLayout.js';
+import { GRAPH } from './world/roadNetwork.js';
 import { buildViewModel } from './ui/viewModel.js';
 import { MAP_BOUNDS } from './ui/hudStyles.js';
 
@@ -186,19 +187,48 @@ function drawFullMap(canvas, game) {
     worldW * b.scale, worldH * b.scale,
     X(minX), Z(minZ), worldW * scale, worldH * scale,
   );
-  // District outlines + labels.
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  // Shorelines (round 3): the baked tile strokes each island rect once
+  // and the coast still reads as a flat rectangle edge. A second, bold
+  // bright stroke on top of the tile makes the three coasts read as
+  // shorelines, and a bright outline round each causeway makes the two
+  // island links read as bridges. The islands ARE rectangles in the
+  // world data (MAP_ISLANDS) — no curved coast is invented here; the
+  // stroke only makes the real coast legible.
+  for (const isl of islandRects()) {
+    ctx.strokeStyle = 'rgba(255, 246, 220, 0.95)';
+    ctx.lineWidth = 5;
+    ctx.strokeRect(X(isl[0]), Z(isl[1]), (isl[2] - isl[0]) * scale, (isl[3] - isl[1]) * scale);
+  }
+  for (const c of [[-90, -14, -70, 14], [230, -14, 250, 14]]) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.75)';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(X(c[0]), Z(c[1]), (c[2] - c[0]) * scale, (c[3] - c[1]) * scale);
+  }
+  // Roads (round 3): the baked tile draws the real road graph in cream
+  // on sand — low contrast, so the street grid never reads and the
+  // islands look like empty blocks. Redraw the SAME graph edges on top
+  // with a dark under-stroke and a cream centre, so the downtown grid,
+  // the boardwalk avenues and the port grid read as a city. Real data
+  // (GRAPH.edges), no invented streets.
+  const road = (width, style) => {
+    ctx.strokeStyle = style;
+    ctx.lineWidth = width;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    for (const e of GRAPH.edges) {
+      ctx.moveTo(X(e.ax), Z(e.az));
+      ctx.lineTo(X(e.bx), Z(e.bz));
+    }
+    ctx.stroke();
+  };
+  road(16, 'rgba(74, 64, 52, 0.8)');
+  road(9, '#f5ead6');
+  // District outlines (labels come last, on top of the route — see below).
   for (const d of districtRects()) {
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.28)';
     ctx.lineWidth = 1;
     ctx.strokeRect(X(d[2]), Z(d[3]), (d[4] - d[2]) * scale, (d[5] - d[3]) * scale);
-    ctx.font = 'bold 17px Arial';
-    ctx.lineWidth = 4;
-    ctx.strokeStyle = 'rgba(10, 25, 35, 0.85)';
-    ctx.strokeText(d[1], X(d[7]), Z(d[8]));
-    ctx.fillStyle = 'rgba(255, 233, 201, 0.95)';
-    ctx.fillText(d[1], X(d[7]), Z(d[8]));
   }
   // Gold route: dark under-stroke for contrast, then the gold line,
   // then small chevrons along each leg pointing the way.
@@ -235,7 +265,9 @@ function drawFullMap(canvas, game) {
     ctx.restore();
   }
   // Markers: safehouse + garage from the career map data, the market
-  // start and the port destination.
+  // start and the port destination, plus the Tidal Gate (round 3) — the
+  // drawbridge landmark at the east causeway, on the route, where the
+  // cover's chase crosses. Real place, (240, 0).
   const dot = (x, z, r, color, label, dy) => {
     ctx.fillStyle = color;
     ctx.beginPath();
@@ -256,6 +288,28 @@ function drawFullMap(canvas, game) {
   for (const m of MAP_MARKERS) dot(m.x, m.z, 6, m.color, m.label, m.dy * 2.3);
   dot(MAP_MARKET[0], MAP_MARKET[1], 10, '#ffc27a', 'MARKET', 26);
   dot(MAP_PORT[0], MAP_PORT[1], 10, '#ff5a3c', 'PORT', 26);
+  dot(240, 0, 8, '#ffffff', 'TIDAL GATE', -26);
+  // District labels LAST (round 3): they used to be drawn before the
+  // gold route, so the route covered them — "Caldera Docks" hid behind
+  // the route leg and the PORT dot, "Ochre Causeway" sat under the
+  // route corner. Drawn on top with the dark halo they read. One
+  // position fix: Caldera Docks moves south off the route (was
+  // (370,-155), on the z=-160 route leg and the PORT dot) to (370,-125),
+  // inside its district and clear of both.
+  const LABEL_FIX = { caldera: [370, -125] };
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  for (const d of districtRects()) {
+    const fix = LABEL_FIX[d[0]];
+    const lx = fix ? fix[0] : d[7];
+    const lz = fix ? fix[1] : d[8];
+    ctx.font = 'bold 17px Arial';
+    ctx.lineWidth = 4;
+    ctx.strokeStyle = 'rgba(10, 25, 35, 0.85)';
+    ctx.strokeText(d[1], X(lx), Z(lz));
+    ctx.fillStyle = 'rgba(255, 233, 201, 0.95)';
+    ctx.fillText(d[1], X(lx), Z(lz));
+  }
   // Player arrow at the market, pointing east along the route.
   ctx.save();
   ctx.translate(X(MAP_MARKET[0]), Z(MAP_MARKET[1]));
@@ -984,14 +1038,25 @@ export function stageShot(kind, game) {
     // staging: radius 6, and the hero's closest approach to (115,125)
     // is ~17 m in the car; after the player steps out no sim ticks
     // run, so update() can neither fail nor advance it.
+    // The contact has RESPONDED — the meeting (stage 0) is done, and
+    // the next objective (stage 1) is the live stage: take the car
+    // onto the quay, the intercept at Tidal Gate. Stage 1 is active
+    // (stage: 1), so the minimap gold route and the mission beacon
+    // point at the gate, not back at the market stall. Stage 1 is a
+    // plain 'goto' with no setupStage side effects (no targets, no
+    // guards), so setting stage: 1 directly is safe. The beacon is
+    // positioned and shown below, in frame ahead of the player.
     g.missions.active = {
       def: {
         id: 8, name: 'KINGPIN', giver: 'Marco', giverRole: 'SYNDICATE',
         briefing: 'Last job. Meet the contact at the market stall — on foot, no noise.',
         reward: 5000, respect: 220, par: 420,
-        stages: [{ type: 'goto', text: 'Meet the contact at the market stall', x: 115, z: 125, radius: 6 }],
+        stages: [
+          { type: 'goto', text: 'Meet the contact at the market stall', x: 115, z: 125, radius: 6 },
+          { type: 'goto', text: 'Take the car onto the quay — the intercept is at Tidal Gate', x: 240, z: 0, radius: 8 },
+        ],
       },
-      stage: 0, timer: 0, totalTimer: 0, gate: 0, kills: 0,
+      stage: 1, timer: 0, totalTimer: 0, gate: 0, kills: 0,
       chaseCar: null, targets: [], guards: [], data: {},
     };
     // Civilian traffic + promenade crowd via the pursuit density
@@ -1135,13 +1200,32 @@ export function stageShot(kind, game) {
     interceptor.speed = 25;
     interceptor.syncMesh();
     g.police.units.push(interceptor);
-    // The beacon is a 26 m gold column over the market — at the frame's
-    // edge it would read as a UI sliver, not a destination. Hide it
-    // (and the ground marker) for this shot, as the pursuit branch
-    // does; the minimap keeps the gold route and the gold target
-    // diamond, so the objective still reads.
-    g.missions.beacon.visible = false;
-    g.missions.marker.visible = false;
+    // NEXT OBJECTIVE VISIBLE (round 3): the beacon is a 26 m gold
+    // column over the LIVE stage target — now the Tidal Gate (240, 0),
+    // ahead of the player in the frame, not the market stall behind
+    // them. The old code hid it because the market target sat at the
+    // frame's edge and read as a UI sliver; the gate target is on the
+    // frame's view axis (~8 deg off the player's heading, ~130 m
+    // away), so the column reads as the next destination. No sim ticks
+    // run after this, so the beacon/marker are positioned by hand here
+    // (the mission update() that normally follows stageTarget never
+    // runs). The minimap keeps the gold route to the same target.
+    const nextTarget = g.missions.stageTarget;
+    if (nextTarget) {
+      g.missions.beacon.position.set(nextTarget.x, 13, nextTarget.z);
+      g.missions.beacon.visible = true;
+      // The beacon's staging opacity (0.18–0.38, animated in update())
+      // washes out in daylight at 130 m — a faint pale sliver, not a
+      // destination. Pin it bright and wide for this shot only (the
+      // mission system itself is untouched): a solid gold column that
+      // reads across the boardwalk. No sim ticks run after this, so
+      // update() cannot reset it.
+      g.missions.beacon.material.opacity = 0.65;
+      g.missions.beacon.scale.set(1.5, 1, 1.5);
+      g.missions.marker.position.set(nextTarget.x, 0.1, nextTarget.z);
+      g.missions.marker.visible = true;
+      console.log('[onfoot-next] beacon at ' + nextTarget.x.toFixed(1) + ',' + nextTarget.z.toFixed(1));
+    }
     // Camera (computed BEFORE the de-conflict, so the keep-out uses the
     // real lens position): combatPose, the established on-foot
     // third-person chase from the live player pose — ~2.5 m behind,

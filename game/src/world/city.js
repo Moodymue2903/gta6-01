@@ -424,17 +424,23 @@ export function buildCity(scene, rng, game) {
   // (within 75 m of (250, 0)) empty, and the probe showed every
   // instanced building in the cover frame is 100+ m away — too far
   // for any facade to read at 620 px. These four sit 37–52 m from the
-  // cover camera, on the island (x -70..230), off the road (z ±24–28),
-  // and use limestoneFacade()/terracottaFacade() directly with a white
+  // cover camera, on the island (x -70..230), and use
+  // limestoneFacade()/terracottaFacade() directly with a white
   // material colour — NO PALETTE.building instance tint, which is what
   // washes the instanced facades out into flat coloured blocks.
   // Fixed positions, no rng() calls, colliders included.
+  // ROUND 3 (Codex): the two at x=205 sat ON the north-south road at
+  // x=200 — their colliders (x 197.5–212.5) covered the centerline
+  // (x=200) and the traffic lane (x=202.2), blocking the
+  // market-to-port route. They move to x=216 (colliders 208.5–223.5),
+  // clear of the road edge at x=205. The two at x=190 stay: their
+  // eastern edge is 196.5, west of the centerline.
   {
     const limeMat = new THREE.MeshLambertMaterial({ map: limestoneFacade() });
     const terraMat = new THREE.MeshLambertMaterial({ map: terracottaFacade() });
     const near = [
-      { x: 205, z: 24, w: 14, d: 12, h: 16, mat: limeMat },
-      { x: 205, z: -24, w: 14, d: 12, h: 22, mat: terraMat },
+      { x: 216, z: 24, w: 14, d: 12, h: 16, mat: limeMat },
+      { x: 216, z: -24, w: 14, d: 12, h: 22, mat: terraMat },
       { x: 190, z: 28, w: 12, d: 10, h: 14, mat: limeMat },
       { x: 190, z: -28, w: 12, d: 10, h: 26, mat: terraMat },
     ];

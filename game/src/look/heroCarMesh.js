@@ -30,8 +30,8 @@ const SPOKE_MAT = new THREE.MeshStandardMaterial({ color: 0x9aa0a8, metalness: 0
 const CALIPER_MAT = new THREE.MeshStandardMaterial({ color: 0xc02020, roughness: 0.4, metalness: 0.4 });
 const INTERIOR_MAT = new THREE.MeshStandardMaterial({ color: 0x14161c, roughness: 0.9, metalness: 0.0 });
 const GLASS_MAT = new THREE.MeshPhysicalMaterial({
-  color: 0x172735, metalness: 0.3, roughness: 0.12, transparent: true,
-  opacity: 0.82, side: THREE.DoubleSide, envMapIntensity: 1.2,
+  color: 0x1e3a52, metalness: 0.3, roughness: 0.08, transparent: true,
+  opacity: 0.82, side: THREE.DoubleSide, envMapIntensity: 1.8,
 });
 const HALO_MAT = new THREE.MeshBasicMaterial({ color: 0xfff6d8 });
 const LENS_MAT = new THREE.MeshBasicMaterial({ color: 0xfff2b0 });
@@ -130,8 +130,8 @@ const BODY_RINGS = [
   { xf: 0.44, wf: 0.99, tf: 0.5 },
   { xf: 0.0, wf: 0.98, tf: 0.57 },
   { xf: -0.44, wf: 0.99, tf: 0.56 },
-  { xf: -0.8, wf: 0.91, tf: 0.52 },
-  { xf: -1.0, wf: 0.77, tf: 0.39 },
+  { xf: -0.8, wf: 0.97, tf: 0.52 },
+  { xf: -1.0, wf: 0.82, tf: 0.39 },
 ];
 
 // Top height of the body loft at car-local x (linear interpolation
@@ -253,6 +253,16 @@ export function buildHeroCar(cls, color, police = false) {
     glass.castShadow = false;
     g.add(glass);
 
+    // ROUND 2 — chrome beltline strip along each side at the base of
+    // the glasshouse, so the glass reads as a separate surface from
+    // the paint. The strip sits just outside the glass surface
+    // (glass half-width 0.86*W/2 at the beltline).
+    for (const s of [-1, 1]) {
+      const belt = mesh(new THREE.BoxGeometry(cabinL * 0.95, 0.03, 0.02), CHROME, cabinX, glassBase + 0.02, s * 0.87);
+      belt.castShadow = false;
+      g.add(belt);
+    }
+
     // Dark interior behind the glass (dashboard, two seats, steering
     // wheel, rear-view mirror) — without it the glass is a hole.
     const dash = mesh(new THREE.BoxGeometry(0.35, 0.12, 1.5), INTERIOR_MAT, cabinX + cabinL / 2 - 0.12, glassBase + 0.12, 0);
@@ -369,6 +379,16 @@ export function buildHeroCar(cls, color, police = false) {
       g.add(skirt);
     }
 
+    // ROUND 2 — rear haunch bulges: a subtle sculpted shoulder over
+    // each rear fender, so the rear quarter reads as a haunch, not a
+    // flat slab. The bulge intersects the body (inner edge inside the
+    // body side) and its top sits just above the beltline.
+    for (const s of [-1, 1]) {
+      const haunch = mesh(new THREE.SphereGeometry(0.5, 12, 8), bodyMat, -L * 0.3, H * 0.48, s * (W / 2 - 0.08));
+      haunch.scale.set(1.3, 0.18, 0.35);
+      g.add(haunch);
+    }
+
     // Police livery: black doors + hood, white roof, light bar, push bar.
     if (police) {
       const hood = mesh(new THREE.BoxGeometry(L * 0.3, 0.02, W * 0.85), DARK_TRIM, L * 0.3, H * 0.52, 0);
@@ -387,6 +407,10 @@ export function buildHeroCar(cls, color, police = false) {
   const wx = cls === 'bike' ? [L * 0.32, -L * 0.32] : [L * 0.32, L * 0.32, -L * 0.32, -L * 0.32];
   const wz = cls === 'bike' ? [0, 0] : [W / 2, -W / 2, W / 2, -W / 2];
   const archGeo = new THREE.TorusGeometry(0.44, 0.05, 8, 24, Math.PI);
+  // ROUND 2 — dark arch trim: a slightly larger, thinner half-torus
+  // just outside the body-colour flare, so the wheel opening reads as
+  // a cut arch with a dark outline.
+  const trimGeo = new THREE.TorusGeometry(0.47, 0.03, 8, 24, Math.PI);
   const wellGeo = new THREE.CircleGeometry(0.46, 16);
   for (let i = 0; i < wx.length; i++) {
     const side = wz[i] === 0 ? 1 : Math.sign(wz[i]);
@@ -401,6 +425,8 @@ export function buildHeroCar(cls, color, police = false) {
     if (cls !== 'bike') {
       const flare = mesh(archGeo, bodyMat, wx[i], 0.36, wz[i] + side * 0.04);
       g.add(flare);
+      const trim = mesh(trimGeo, DARK_TRIM, wx[i], 0.36, wz[i] + side * 0.055);
+      g.add(trim);
       const well = mesh(wellGeo, DARK_WELL, wx[i], 0.36, wz[i] + side * 0.005, false);
       well.castShadow = false;
       if (side < 0) well.rotation.y = Math.PI;

@@ -213,17 +213,37 @@ export function buildCity(scene, rng, game) {
   // y = -1.5); the mast gives it a vertical read at 620 px. Long
   // axis north-south so the broad side faces the west-looking
   // cover camera.
+  // ROUND 2 (Codex correction) — moored boat: moved to (232, 0, 19)
+  // and given a tapered bow. The centre at (231, 0, 22) was in water
+  // but the 3 m hull extended 0.5 m into the bank (x < 230 is land).
+  // At (232, 0, 19) the hull spans x 230.5–233.5 (0.5 m clear of the
+  // bank) and z 15–23 (1 m clear of the quay slab at z 7–14). The bow
+  // is a pointed extruded plan shape (not a rectangular box end) so
+  // the hull reads as a boat, and the hull is vivid red so it
+  // contrasts with both the tan quay (0xb79c7b) and the teal water.
+  // Shape coords: x = across (world X), y = along (world Z after the
+  // -90° X rotation); bow point at shape y = -4 maps to world z = +4
+  // (south, away from the quay). Extrude depth 1.2 is the hull height.
   const boat = new THREE.Group();
+  const hullShape = new THREE.Shape();
+  hullShape.moveTo(-1.5, 4);
+  hullShape.lineTo(1.5, 4);
+  hullShape.lineTo(1.5, -2.5);
+  hullShape.lineTo(0, -4);
+  hullShape.lineTo(-1.5, -2.5);
+  hullShape.closePath();
+  const hullGeo = new THREE.ExtrudeGeometry(hullShape, { depth: 1.2, bevelEnabled: false });
+  hullGeo.rotateX(-Math.PI / 2);
   const boatHull = new THREE.Mesh(
-    new THREE.BoxGeometry(3, 1.2, 8),
-    new THREE.MeshLambertMaterial({ color: 0x8a5a3b }),
+    hullGeo,
+    new THREE.MeshLambertMaterial({ color: 0xd21f2b }),
   );
-  boatHull.position.y = -1.0;
+  boatHull.position.y = -1.6;
   boatHull.castShadow = true;
   boat.add(boatHull);
   const boatCabin = new THREE.Mesh(
     new THREE.BoxGeometry(2, 1, 3),
-    new THREE.MeshLambertMaterial({ color: 0xf2ead8 }),
+    new THREE.MeshLambertMaterial({ color: 0xffffff }),
   );
   boatCabin.position.set(0, 0.1, -0.5);
   boatCabin.castShadow = true;
@@ -234,7 +254,13 @@ export function buildCity(scene, rng, game) {
   );
   boatMast.position.set(0, 2.2, 0.5);
   boat.add(boatMast);
-  boat.position.set(231, 0, 22);
+  const boatFlag = new THREE.Mesh(
+    new THREE.BoxGeometry(0.7, 0.4, 0.02),
+    new THREE.MeshLambertMaterial({ color: 0xffd23f }),
+  );
+  boatFlag.position.set(0.35, 4.2, 0.5);
+  boat.add(boatFlag);
+  boat.position.set(232, 0, 19);
   scene.add(boat);
   // FIX ROUND 6 — wet causeway band: the chase stretch (x 230-300)
   // is dark wet asphalt, not the tan promenade slabs, so the road
@@ -392,6 +418,36 @@ export function buildCity(scene, rng, game) {
     roofs.castShadow = true;
     scene.add(roofs);
   });
+  // ROUND 2 — hand-placed waterfront buildings flanking the causeway
+  // approach, so the cover frame has textured stone/terracotta in the
+  // near field. The plot system leaves the drawbridge landing plaza
+  // (within 75 m of (250, 0)) empty, and the probe showed every
+  // instanced building in the cover frame is 100+ m away — too far
+  // for any facade to read at 620 px. These four sit 37–52 m from the
+  // cover camera, on the island (x -70..230), off the road (z ±24–28),
+  // and use limestoneFacade()/terracottaFacade() directly with a white
+  // material colour — NO PALETTE.building instance tint, which is what
+  // washes the instanced facades out into flat coloured blocks.
+  // Fixed positions, no rng() calls, colliders included.
+  {
+    const limeMat = new THREE.MeshLambertMaterial({ map: limestoneFacade() });
+    const terraMat = new THREE.MeshLambertMaterial({ map: terracottaFacade() });
+    const near = [
+      { x: 205, z: 24, w: 14, d: 12, h: 16, mat: limeMat },
+      { x: 205, z: -24, w: 14, d: 12, h: 22, mat: terraMat },
+      { x: 190, z: 28, w: 12, d: 10, h: 14, mat: limeMat },
+      { x: 190, z: -28, w: 12, d: 10, h: 26, mat: terraMat },
+    ];
+    for (const b of near) {
+      const m = new THREE.Mesh(boxGeo, b.mat);
+      m.position.set(b.x, 0, b.z);
+      m.scale.set(b.w, b.h, b.d);
+      m.castShadow = true;
+      m.receiveShadow = true;
+      scene.add(m);
+      colliders.push({ x0: b.x - b.w / 2 - 0.5, z0: b.z - b.d / 2 - 0.5, x1: b.x + b.w / 2 + 0.5, z1: b.z + b.d / 2 + 0.5 });
+    }
+  }
   // Roof clutter (water tanks, vents, antennae) on a share of tall
   // buildings, so the skyline steps instead of running flat. Uses the same
   // dedicated RNG (see above) so the main plot stream is untouched.

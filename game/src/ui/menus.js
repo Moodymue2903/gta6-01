@@ -44,6 +44,7 @@ export class Menus {
         <span><b>M</b> radio</span><span><b>T</b> career</span><span><b>ESC</b> pause</span><span><b>MOUSE</b> look / aim</span>
       </div>
       <div class="t-start">PRESS ENTER TO START</div>
+      <div class="t-slots"></div>
       <div class="t-save"></div>`;
     this.root.appendChild(this.titleEl);
 
@@ -71,8 +72,21 @@ export class Menus {
 
   showTitle() {
     const save = this.game.progression.missionsDone.size > 0 || this.game.progression.cash > 250;
+    // STEP 4 (show-the-depth): the title screen carries the place
+    // tagline, the three REAL save slots and the REAL completion % —
+    // all from the live view-model (buildViewModel), never typed in.
+    // The subtitle is the game's place line; the slots are the same
+    // slotSummary data the career screen lists.
+    const vm = buildViewModel(this.game);
+    const sub = this.titleEl.querySelector('.t-sub');
+    if (sub) sub.textContent = 'TIDAL GATE · EST. 1962';
+    const slotsEl = this.titleEl.querySelector('.t-slots');
+    if (slotsEl && vm.career) {
+      slotsEl.innerHTML = vm.career.slots.map((s) => `<div class="t-slot${s.empty ? ' empty' : ''}"><b>${s.title}</b><span>${s.line}</span></div>`).join('');
+    }
+    const pct = vm.career ? vm.career.pctNum : '';
     this.titleEl.querySelector('.t-save').textContent = save
-      ? `Save found: ${this.game.progression.missionsDone.size}/8 jobs done, V$${this.game.progression.cash.toLocaleString('en-US')} — press ENTER to continue`
+      ? `Save found: ${this.game.progression.missionsDone.size}/8 jobs done, V$${this.game.progression.cash.toLocaleString('en-US')} — ${pct} complete — press ENTER to continue`
       : 'No save yet — a fresh start on the Keys.';
     this.titleEl.classList.add('show');
     this.pauseEl.classList.remove('show');

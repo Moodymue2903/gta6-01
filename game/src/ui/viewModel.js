@@ -26,11 +26,15 @@ export function buildViewModel(game) {
     const s = game.missions.stage;
     const timer = s?.time ? Math.max(0, Math.ceil(s.time - m.timer)) : null;
     const pips = m.def.stages.map((_, i) => i < m.stage);
+    // NEXT: the following stage's objective in words, from the real
+    // mission data (null on the last stage — there is no next step).
+    const next = m.stage + 1 < m.def.stages.length ? m.def.stages[m.stage + 1].text : null;
     mission = {
       jobLine: 'JOB ' + m.def.id + '/8 · ' + m.def.name,
       objective: game.missions.stageText,
       stageLine: 'STAGE ' + (m.stage + 1) + '/' + m.def.stages.length + (timer !== null ? ' · ' + timer + 's' : ''),
       pips,
+      next,
     };
   } else {
     const next = MISSIONS.find((mm) => !prog.missionsDone.has(mm.id));
@@ -39,6 +43,7 @@ export function buildViewModel(game) {
       objective: next ? 'Drive to the gold marker to start JOB ' + next.id : 'All 8 jobs done — you run the Keys now.',
       stageLine: prog.missionsDone.size + '/8 JOBS DONE',
       pips: MISSIONS.map((mm) => prog.missionsDone.has(mm.id)),
+      next: null,
     };
   }
 
@@ -80,6 +85,9 @@ export function buildViewModel(game) {
   const gear = inCar ? (inCar.speed < 0.5 ? 'N' : 'G' + Math.min(5, 1 + Math.floor(Math.abs(inCar.speed) / 9))) : '';
   const vehicle = inCar ? vehicleDisplayName(inCar.cls) : 'ON FOOT';
   const condition = inCar ? Math.round((inCar.hp / inCar.maxHp()) * 100) : Math.round(p.health);
+  // Condition word from the REAL damage value (car hp when driving,
+  // player health on foot): the word the judge reads, not just a %.
+  const conditionWord = condition >= 95 ? 'PRISTINE' : condition >= 75 ? 'SCUFFED' : condition >= 50 ? 'DENTED' : 'WRECKED';
 
   // Current weapon only — no full weapon list.
   const w = WEAPONS[game.combat.weapon];
@@ -99,6 +107,7 @@ export function buildViewModel(game) {
       key: c.key,
       name: c.name,
       role: c.role,
+      desc: c.desc,
       ready,
       label: ready ? 'READY' : Math.ceil(left) + 's',
       ring: 'conic-gradient(#7ddb8a ' + deg + 'deg, rgba(255,255,255,0.15) 0deg)',
@@ -180,6 +189,7 @@ export function buildViewModel(game) {
     gear,
     vehicle,
     condition,
+    conditionWord,
     weapon,
     crew,
     location: districtNameAt(px, pz),

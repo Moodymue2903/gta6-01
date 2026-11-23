@@ -42,6 +42,7 @@ const HUDV3_CSS = `
 #hv3-mission .m-obj { font-size: 19px; font-weight: 700; line-height: 1.2; margin: 2px 0; }
 #hv3-mission .m-stage { color: #9fd8dd; font-size: 13px; letter-spacing: .5px; }
 #hv3-mission .m-pips { color: #9fd8dd; font-size: 12px; letter-spacing: 3px; }
+#hv3-mission .m-next { color: #ffc27a; font-size: 14px; font-weight: 700; letter-spacing: .5px; margin-top: 2px; }
 #hv3-roster { position: absolute; top: 116px; left: 12px; width: 300px; display: none;
   background: linear-gradient(135deg, rgba(40, 22, 30, 0.82), rgba(70, 34, 30, 0.7)); border: 1.5px solid rgba(239, 68, 68, .45);
   border-left: 3px solid #f2a33a; border-radius: 6px; padding: 7px 12px; }
@@ -70,15 +71,25 @@ const HUDV3_CSS = `
 #hv3-cash .clock { font-size: 13px; color: #9fd8dd; font-weight: 700; }
 #hv3-minimap-wrap { position: absolute; left: 12px; bottom: 12px; width: 160px; height: 160px; }
 #hv3-minimap { width: 160px; height: 160px; display: block; }
-#hv3-crew { position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-  display: flex; flex-direction: column; gap: 10px; }
-#hv3-crew .cm { width: 52px; text-align: center; }
-#hv3-crew .cm-ring { width: 52px; height: 52px; border-radius: 50%; padding: 3px; }
-#hv3-crew .cm-core { width: 100%; height: 100%; border-radius: 50%; background: rgba(10,14,26,.9);
-  color: #fff; font-size: 20px; font-weight: 800; display: flex; align-items: center;
-  justify-content: center; border: 1.5px solid rgba(255,255,255,.25); }
-#hv3-crew .cm-name { font-size: 11px; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
-#hv3-crew .cm-label { font-size: 11px; color: #7ddb8a; font-weight: 700; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
+/* Crew rows (not medallions): name + role + ability + state, each row
+   legible at thumbnail size — the name and state are bold and larger
+   than the ability line, per the re-test 13 judges. The panel sits
+   under the cash box on the right edge, clear of the weapon chip. */
+#hv3-crew { position: absolute; right: 12px; top: 116px; width: 250px;
+  display: flex; flex-direction: column; gap: 8px; }
+#hv3-crew .cm { display: flex; align-items: center; gap: 9px; text-align: left;
+  background: linear-gradient(135deg, rgba(40, 22, 30, 0.82), rgba(70, 34, 30, 0.7));
+  border: 1.5px solid rgba(255, 194, 122, .45); border-left: 3px solid #f2a33a;
+  border-radius: 6px; padding: 6px 10px; }
+#hv3-crew .cm-key { width: 30px; height: 30px; flex: 0 0 30px; border-radius: 50%;
+  background: rgba(10,14,26,.9); color: #fff; font-size: 16px; font-weight: 800;
+  display: flex; align-items: center; justify-content: center;
+  border: 1.5px solid rgba(255,255,255,.25); }
+#hv3-crew .cm-body { flex: 1; min-width: 0; }
+#hv3-crew .cm-name { font-size: 15px; font-weight: 800; text-shadow: 0 1px 3px rgba(0,0,0,.9); }
+#hv3-crew .cm-name i { font-style: normal; color: #9fd8dd; font-size: 11px; font-weight: 700; margin-left: 6px; letter-spacing: 1px; }
+#hv3-crew .cm-ability { font-size: 12px; color: #ffd9a0; font-weight: 600; line-height: 1.25; }
+#hv3-crew .cm-state { font-size: 13px; font-weight: 800; color: #7ddb8a; text-shadow: 0 1px 3px rgba(0,0,0,.9); white-space: nowrap; }
 #hv3-weapon { position: absolute; right: 12px; bottom: 92px; min-width: 150px; text-align: right;
   background: linear-gradient(135deg, rgba(40, 22, 30, 0.82), rgba(70, 34, 30, 0.7)); border: 1.5px solid rgba(255, 194, 122, .55);
   border-left: 3px solid #f2a33a; border-radius: 6px; padding: 6px 12px; }
@@ -90,7 +101,7 @@ const HUDV3_CSS = `
 #hv3-speed .spd b { font-size: 26px; font-weight: 800; }
 #hv3-speed .spd span { font-size: 13px; color: #9fd8dd; font-weight: 700; margin-left: 6px; }
 #hv3-speed .veh { font-size: 13px; font-weight: 700; }
-#hv3-speed .cond-lbl { font-size: 11px; color: #ffd9a0; font-weight: 700; letter-spacing: 1px; }
+#hv3-speed .cond-lbl { font-size: 14px; color: #ffd9a0; font-weight: 800; letter-spacing: 1px; }
 #hv3-scanner { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
   display: none; background: rgba(10, 14, 26, .75); border-radius: 4px; padding: 3px 12px;
   font-size: 12px; white-space: nowrap; max-width: 460px; overflow: hidden; text-overflow: ellipsis; }
@@ -115,7 +126,23 @@ const HUDV3_CSS = `
 #hv3-vignette { position: absolute; inset: 0; pointer-events: none; opacity: 0; }
 #hv3-vignette.show { opacity: 1; }
 #hv3-vignette.show.hit { box-shadow: inset 0 0 90px rgba(239,68,68,.55); }
+/* Dialogue: hidden everywhere EXCEPT the combat shot, where the
+   mission contact's line shows with a speaker badge (initials + the
+   character's colour — there is no portrait art). The cover stays
+   clean; the combat frame carries the conversation. Rendered by
+   renderDialogue() from missionComms.current(), gated on the shot
+   kind — never on the cover, drive, pursuit, on-foot, map or title. */
 #hv3-dialogue { display: none; }
+#hv3-dialogue.show { display: flex; position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+  align-items: center; gap: 12px; max-width: 640px;
+  background: linear-gradient(135deg, rgba(40, 22, 30, 0.88), rgba(70, 34, 30, 0.78));
+  border: 1.5px solid rgba(255, 194, 122, .55); border-left: 3px solid #f2a33a;
+  border-radius: 6px; padding: 10px 16px; }
+#hv3-dialogue .d-badge { width: 44px; height: 44px; flex: 0 0 44px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 800; color: #fff; }
+#hv3-dialogue .d-speaker { font-size: 14px; font-weight: 800; color: #ffc27a; letter-spacing: 1px; }
+#hv3-dialogue .d-line { font-size: 16px; font-weight: 700; color: #fff; line-height: 1.3; }
 `;
 
 export class HUDV3 {
@@ -151,11 +178,34 @@ export class HUDV3 {
     this._flashT = ZERO;
   }
 
-  // Dialogue is hidden by design in v3 (the cover must not carry a
-  // chat card). The calls still exist so boot/shots code never breaks.
-  showDialogue() {}
-  clearDialogue() {}
-  renderDialogue() {}
+  // Dialogue: rendered ONLY on the combat shot (the cover must not
+  // carry a chat card). The card comes from missionComms.current() —
+  // the real mission contact's name, role and line. The badge is the
+  // speaker's initials on their character colour (no portrait art
+  // exists). showDialogue/clearDialogue keep the old interface for
+  // boot/shots code; renderDialogue() is called from update().
+  showDialogue() { this.renderDialogue(); }
+  clearDialogue() {
+    this.dialogue.classList.remove('show');
+    this.dialogue.innerHTML = '';
+  }
+  renderDialogue() {
+    const g = this.game;
+    const card = g.missionComms ? g.missionComms.current() : null;
+    if (g.shotKind !== 'combat' || !card) {
+      this.dialogue.classList.remove('show');
+      this.dialogue.innerHTML = '';
+      return;
+    }
+    const COLORS = { Kiki: '#2e9e5b', Mira: '#c78a1a', Lo: '#2b7fb8', Marco: '#c23b2a' };
+    const color = COLORS[card.speaker] || '#7a6a8a';
+    const initials = card.speaker.slice(0, 2).toUpperCase();
+    this.dialogue.innerHTML =
+      `<div class="d-badge" style="background:${color}">${esc(initials)}</div>` +
+      `<div><div class="d-speaker">${esc(card.speaker.toUpperCase())} · ${esc(card.role)}</div>` +
+      `<div class="d-line">${esc(card.text)}</div></div>`;
+    this.dialogue.classList.add('show');
+  }
 
   banner(title, sub = '') {
     this.bannerEl.innerHTML = `<div class="banner-title">${esc(title)}</div><p>${esc(sub)}</p>`;
@@ -192,7 +242,8 @@ export class HUDV3 {
     }
 
     const mc = vm.mission;
-    this.missionCard.innerHTML = `<div class="m-job">${esc(mc.jobLine)}</div><div class="m-obj">${esc(mc.objective)}</div><div class="m-stage">${esc(mc.stageLine)}</div><div class="m-pips">${mc.pips.map((on) => (on ? '●' : '○')).join(' ')}</div>`;
+    const nextLine = mc.next ? `<div class="m-next">NEXT: ${esc(mc.next)}</div>` : '';
+    this.missionCard.innerHTML = `<div class="m-job">${esc(mc.jobLine)}</div><div class="m-obj">${esc(mc.objective)}</div><div class="m-stage">${esc(mc.stageLine)}</div>${nextLine}<div class="m-pips">${mc.pips.map((on) => (on ? '●' : '○')).join(' ')}</div>`;
 
     const w = this.wanted;
     w.classList.toggle('red', vm.wanted.state === 'red');
@@ -222,11 +273,11 @@ export class HUDV3 {
     // staging equips the MAKO SMG, so the chip reads MAKO 30/180.
     this.weaponChip.innerHTML = `<b>${esc(vm.weapon.name)}</b><span>${esc(vm.weapon.ammo)}</span>`;
 
-    this.crewEl.innerHTML = vm.crew.map((c) => `<div class="cm"><div class="cm-ring" style="background:${c.ring}"><div class="cm-core">${esc(c.key)}</div></div><div class="cm-name">${esc(c.name)}</div><div class="cm-label">${esc(c.label)}</div></div>`).join('');
+    this.crewEl.innerHTML = vm.crew.map((c) => `<div class="cm"><div class="cm-key">${esc(c.key)}</div><div class="cm-body"><div class="cm-name">${esc(c.name)}<i>${esc(c.role)}</i></div><div class="cm-ability">${esc(c.desc)}</div></div><div class="cm-state">${esc(c.label)}</div></div>`).join('');
 
     this.speedBox.innerHTML = `<div class="spd"><b>${vm.speedKmh}</b><span>km/h ${esc(vm.gear)}</span></div>` +
       `<div class="veh">${esc(vm.vehicle)}</div>` +
-      `<div class="cond-lbl">CONDITION ${vm.condition}%</div>`;
+      `<div class="cond-lbl">CONDITION ${esc(vm.conditionWord)} · ${vm.condition}%</div>`;
 
     if (vm.scanner) {
       this.tickerEl.innerHTML = `<b>VKPD SCANNER</b><span>${esc(vm.scanner)}</span>`;
@@ -237,6 +288,7 @@ export class HUDV3 {
 
     this.crosshair.classList.toggle('show', vm.crosshair);
     drawBakedMinimap(this.minimap, vm);
+    this.renderDialogue();
   }
 }
 

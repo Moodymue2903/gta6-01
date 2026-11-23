@@ -443,7 +443,7 @@ function buildMapOverlay(game) {
   overlay.innerHTML = `
     <div style="height:64px;flex:0 0 64px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;background:#0a1a24;border-bottom:2px solid rgba(255,194,122,0.45);">
       <div><span style="font-size:26px;font-weight:900;letter-spacing:2px;">VERMILION KEYS</span> <span style="font-size:16px;letter-spacing:3px;color:#ffc27a;">— THE KEYS · ISLAND MAP</span></div>
-      <div style="font-size:16px;letter-spacing:1px;">${vm.career.pctNum} COMPLETE · ${vm.career.rank} · ${vm.career.cash} · 8 DISTRICTS · 3 ISLANDS</div>
+      <div style="font-size:16px;letter-spacing:1px;">${vm.career.pctNum} COMPLETE · ${vm.career.rank} · ${vm.career.cash} · ${districtRects().length} DISTRICTS · ${islandRects().length} ISLANDS</div>
     </div>
     <canvas id="map-shot-canvas" width="1280" height="608" style="flex:1 1 auto;width:1280px;height:608px;display:block;"></canvas>
     <div style="height:48px;flex:0 0 48px;display:flex;align-items:center;gap:26px;padding:0 28px;background:#0a1a24;border-top:2px solid rgba(255,194,122,0.45);font-size:15px;letter-spacing:1px;">
@@ -604,6 +604,47 @@ export function stageShot(kind, game) {
       // -0.17, half-length 1.03); the panel sits just proud of it.
       rearGlass.position.set(-1.23, 0.98, 0);
       runCar.mesh.add(rearGlass);
+    }
+    // STAGE A REAL RAM (Step 2, integrity): the hero must arrive with
+    // real damage, and the damage must come from an actual collision,
+    // not a hand-set number. The police ram (police.js: a pursue unit
+    // within 3.4 m, ramCooldown 0, deals 6 damage, 1.2 s cooldown) is
+    // the real collision. Done right after the freeze, BEFORE the
+    // chaser/interceptor are staged: at this point the cruiser count
+    // is at its wanted 6, so the police update's trim (which fires on
+    // any stepSim tick once the staged units push it to 8) cannot
+    // remove units. The hero is held stationary, the farthest existing
+    // pursue unit is placed 2.5 m south of the hero, and 1 sim tick
+    // runs — the ram fires on that tick (the unit is already within
+    // 3.4 m) and the 1.2 s cooldown blocks a second, so exactly
+    // 6 damage. (1 tick, not 5: each tick advances the game clock a
+    // game-second, and 5 ticks pushed the cover clock 17:59 → 18:00.)
+    // the frame; the damage stays in the car's HP. 6 damage on 80 HP =
+    // 74/80 = 93% = SCUFFED. No unit is added, so the roster stays 10.
+    {
+      const heroX = runCar.pos.x;
+      const heroZ = runCar.pos.z;
+      runCar.speed = 0;
+      const cands = g.police.units.filter((u) => u.unit && u.unit.state !== 'roadblock');
+      cands.sort((a, b) => Math.hypot(b.pos.x - heroX, b.pos.z - heroZ) - Math.hypot(a.pos.x - heroX, a.pos.z - heroZ));
+      const ramUnit = cands[0];
+      if (ramUnit) {
+        ramUnit.pos.set(heroX, 0, heroZ + 2.5);
+        ramUnit.heading = Math.PI;
+        ramUnit.speed = 0;
+        ramUnit.unit.state = 'pursue';
+        ramUnit.unit.flankTarget = null;
+        ramUnit.unit.ramCooldown = 0;
+        ramUnit.syncMesh();
+        for (let i = 0; i < 1; i++) g.stepSim(1 / 60);
+        console.log('[cover-ram] hp after ram=' + runCar.hp + '/' + runCar.maxHp() + ' unit=' + (ramUnit.unit.name || '?') + ' units=' + g.police.units.length);
+        ramUnit.pos.set(302, 0, 2.2);
+        ramUnit.syncMesh();
+      } else {
+        console.log('[cover-ram] NO candidate: units=' + g.police.units.length);
+      }
+      runCar.speed = 43;
+      runCar.syncMesh();
     }
     // The chase, frozen (FIX ROUND 7): the hero drives grounded at (236, 0.32, 0)
     // and the police converge from the west, spread across the frame
@@ -802,11 +843,47 @@ export function stageShot(kind, game) {
       if (hp.pool) hp.pool.material.opacity = 0.12;
     }
     // Camera (FIX ROUND 8, Builder B): low rear three-quarter chase,
+    // COVER DENSITY (Step 6): extra NPCs ONLY in the cover branch, on
+    // the south promenade in the orbited camera's southwest view — the
+    // street must not read empty. Placed AFTER the drive loop (frozen
+    // poses, no sim ticks after, so they stay on their marks). The
+    // west end (x 210-230) is clear of the existing archetypes
+    // (x 234-249) and off the road (z +10..12 is promenade).
+    // spawnArchetype is the population director's real spawner.
+    for (const s of [
+      { kind: 'tourist', x: 210, z: 11 },
+      { kind: 'skater', x: 216, z: 12 },
+      { kind: 'tourist', x: 222, z: 10 },
+      { kind: 'lookout', x: 228, z: 12 },
+      { kind: 'tourist', x: 212, z: 10 },
+      { kind: 'skater', x: 218, z: 11 },
+      { kind: 'tourist', x: 224, z: 12 },
+      { kind: 'lookout', x: 230, z: 10 },
+    ]) {
+      const p = g.population.spawnArchetype(s.kind, s.x, s.z);
+      p.state = 'walk';
+      p.idle = 0;
+    }
     // behind-RIGHT, computed from the REAL sim pose by coverPose —
     // never a hand-posed guess. The round-7 high south-east camera
     // is gone: the hero's right flank, the wet road and the sunset
     // harbour read from ~2 m above the car's base, ~6.2 m behind it.
     const coverCam = coverPose(runCar);
+    // COVER ORBIT (Step 1): rotate the camera 30° around the hero so
+    // the car is not dead-on rear — the rear three-quarter shows the
+    // tail bar, glass and plate plus the right flank. Applied to the
+    // coverPose result (never hardcoded vectors), cover branch only.
+    // +30° first; if the front shows, use -30°.
+    {
+      const COVER_ORBIT_DEG = 30;
+      const hero = new THREE.Vector3(runCar.pos.x, runCar.pos.y, runCar.pos.z);
+      const up = new THREE.Vector3(0, 1, 0);
+      const rad = THREE.MathUtils.degToRad(COVER_ORBIT_DEG);
+      const posOff = coverCam.pos.clone().sub(hero).applyAxisAngle(up, rad);
+      const lookOff = coverCam.lookAt.clone().sub(hero).applyAxisAngle(up, rad);
+      coverCam.pos.copy(hero).add(posOff);
+      coverCam.lookAt.copy(hero).add(lookOff);
+    }
     // DAYLIGHT COVER (2026-11-23, Codex verdict 4): raise the chase
     // camera so the southern coast reads over the island slab edge.
     // Raycast proof (probe-cover-raycast.mjs, dusk staging): the
@@ -855,12 +932,16 @@ export function stageShot(kind, game) {
     // rotY 1.09 puts the hull perpendicular to the view line (the
     // view runs ~27 deg from the hull's long axis), scale 1.2.
     // The live game keeps the boat at (232, 0, 19) unrotated.
+    // STEP 1 (show-the-depth): the boat reads only as a thin red
+    // sliver at the cover's far left edge, so it is hidden in the
+    // cover shot — the sliver is not helping the frame.
     if (g.city.boat) {
       const BOAT = { x: 232, z: 19, rotY: 1.09, scale: 1.2 };
       g.city.boat.position.x = BOAT.x;
       g.city.boat.position.z = BOAT.z;
       g.city.boat.rotation.y = BOAT.rotY;
       g.city.boat.scale.setScalar(BOAT.scale);
+      g.city.boat.visible = false;
     }
     // COOL COUNTER-ACCENT (user update 2026-11-23 ~23:39 IST) — a
     // cool teal light from the camera side, opposite the warm sun,
@@ -1678,6 +1759,25 @@ export function stageShot(kind, game) {
     g.camera.fov = garageCam.fov;
     g.camera.updateProjectionMatrix();
     g.menus.showGarage();
+  } else if (kind === 'title') {
+    // THE TITLE (Step 4): the real title screen — 'VERMILION KEYS',
+    // 'TIDAL GATE · EST. 1962', the three real save slots and the real
+    // completion %, all from the live run state via showTitle(). This
+    // replaces the garage as the fourth packaged frame. The 3D scene
+    // behind the overlay is the run's dusk waterfront (a wide shot over
+    // the Keys), so the frame is a menu over the game, not a flat slab.
+    const { runCar } = stageRun(g);
+    void runCar;
+    g.lighting.setTimeOfDay('dusk');
+    g.renderer.toneMappingExposure = 1.3;
+    g.police.clearHeat();
+    g.player.spawn(115, 125, Math.PI / 2);
+    g.cameraCtl.setShotPose([0, 90, 180], [0, 0, 0]);
+    g.menus.showTitle();
+    // The title screen is a menu over the game: hide the HUD so the
+    // mission card, roster, minimap and speedo do not bleed through
+    // the overlay (same as buildMapOverlay does for the map frame).
+    g.hud.root.style.display = 'none';
   } else if (kind === 'map') {
     // THE MAP (C1 fix, 2026-11-23): the whole of the Keys on one
     // screen — the baked minimap tile full-screen, district labels,
@@ -1706,9 +1806,14 @@ export function stageShot(kind, game) {
   g.hud.clearDialogue();
   // FIX ROUND 7 — cover: pin Marco's KINGPIN line (missionComms
   // renders it from current(); clearDialogue only clears the legacy
-  // line). Combat: force the weapon wheel open on the SMG.
+  // line). Combat: force the weapon wheel open on the SMG, and pin the
+  // combat contact's line (Kiki, YARD AMBUSH) so the dialogue card
+  // renders — the combat frame carries the conversation.
   if (kind === 'cover') g.missionComms.showForShot('cover');
-  if (kind === 'combat') g.weaponWheel.openForShot();
+  if (kind === 'combat') {
+    g.weaponWheel.openForShot();
+    g.missionComms.showForShot('combat');
+  }
   g.hud.update(0);
   const focus =
     kind === 'cover' ? { x: 250, z: 0, r: 60 }

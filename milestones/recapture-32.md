@@ -1,7 +1,7 @@
 # Recapture 32 — witnessed re-capture (recording 32)
 
 Recording 32 ID: `01a20b88-a802-71a1-9808-bd5ba7d779d1`
-Commit: TBD (filled in after commit)
+Commit: `7a539bf1055fc6f9a66a35c9406056b54ba19023` (remote main matches)
 Base: `cbbdf6e6` (recording-31 recapture)
 
 ## Why this round exists

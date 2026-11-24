@@ -853,47 +853,27 @@ export function stageShot(kind, game) {
       if (ud.hotspot) ud.hotspot.scale.set(3.0, 3.0, 1);
       if (hp.pool) hp.pool.material.opacity = 0.12;
     }
-    // Camera (FIX ROUND 8, Builder B): low rear three-quarter chase,
-    // COVER DENSITY (Step 6): extra NPCs ONLY in the cover branch, on
-    // the south promenade in the orbited camera's southwest view — the
-    // street must not read empty. Placed AFTER the drive loop (frozen
-    // poses, no sim ticks after, so they stay on their marks). The
-    // west end (x 210-230) is clear of the existing archetypes
-    // (x 234-249) and off the road (z +10..12 is promenade).
-    // RECORDING 33 (user, 2026-11-24 10:24 IST): the 32b039ec cover
-    // frame reads the NPCs as WALKING ON WATER — they stand on island
-    // 2 (x 210-230) with the water channel (x 230-250) between them
-    // and the camera, so the teal water reads under their feet.
-    // REVISION (recapture 1): shifting them 15 m west (x 195-215)
-    // did NOT fix it — any spot on island 2 has the channel between
-    // it and the camera. Moved to the NEAR side: island 3's south
-    // promenade (x 255-268, z 10-14), west of the hero, on tan land
-    // with NO water between them and the camera. They stay off the
-    // road (z +10..14 is promenade) and keep the left side populated.
-    // REVISION (recapture 3): x 255-268, z 10-14 put them too close
-    // to the camera's south edge — out of frame to the left, so the
-    // left side read empty. Moved to the sidewalk edge (x 250-258,
-    // z 6-8): still island 3 tan land, no water between them and the
-    // camera, but inside the frame's left edge and off the road.
-    // spawnArchetype is the population director's real spawner.
-    for (const s of [
-      { kind: 'tourist', x: 250, z: 6 },
-      { kind: 'skater', x: 252, z: 8 },
-      { kind: 'tourist', x: 254, z: 7 },
-      { kind: 'lookout', x: 256, z: 6 },
-      { kind: 'tourist', x: 251, z: 8 },
-      { kind: 'skater', x: 253, z: 7 },
-      { kind: 'tourist', x: 255, z: 6 },
-      { kind: 'lookout', x: 257, z: 8 },
-    ]) {
-      const p = g.population.spawnArchetype(s.kind, s.x, s.z);
-      p.state = 'walk';
-      p.idle = 0;
-    }
-    // behind-RIGHT, computed from the REAL sim pose by coverPose —
-    // never a hand-posed guess. The round-7 high south-east camera
-    // is gone: the hero's right flank, the wet road and the sunset
-    // harbour read from ~2 m above the car's base, ~6.2 m behind it.
+    // Move three existing civilians onto the fixed timber landing after
+    // the chase. Reuse the live character rigs and population roster.
+    const bystanders = g.peds.peds.filter(p => p.mesh.userData.rig && !p.static && !p.guard && p.state !== 'down');
+    const landingPoses = [
+      { x: 238.1, z: 10.5, heading: 2.6, pose: 'walk', phase: 0.19 },
+      { x: 236.2, z: 11.8, heading: 1.9, pose: 'walk', phase: 0.73 },
+      { x: 233.6, z: 9.8, heading: 2.3, pose: 'idle', phase: 0 },
+    ];
+    landingPoses.forEach((mark, i) => {
+      const ped = bystanders[i];
+      if (!ped) return;
+      ped.mesh.userData.rig.setPose(mark.pose, mark.phase);
+      ped.mesh.rotation.y = mark.heading;
+      ped.mesh.position.set(mark.x, 0, mark.z);
+      const sole = new THREE.Box3().setFromObject(ped.mesh, true).min.y;
+      ped.pos.set(mark.x, 0.016 - sole, mark.z);
+      ped.heading = mark.heading;
+      ped.mesh.position.copy(ped.pos);
+      ped.mesh.visible = true;
+    });
+
     const coverCam = coverPose(runCar);
     // COVER ORBIT (Step 1): rotate the camera 30° around the hero so
     // the car is not dead-on rear — the rear three-quarter shows the

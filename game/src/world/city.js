@@ -198,6 +198,55 @@ export function buildCity(scene, rng, game) {
     quay.receiveShadow = true;
     scene.add(quay);
   }
+  // A timber landing on the fixed south quay. The deck sits flush with
+  // walkable ground. All solid fittings stay outside the drawbridge.
+  const fittings = [];
+  function addFitting(x, y, z, width, height, depth, color) {
+    fittings.push({ x, y, z, width, height, depth, color });
+  }
+  const timber = [0xb58862, 0xa67856, 0xbb926c, 0xa77e60, 0xb58b66];
+  const iron = 0x205052;
+  const cream = 0xe9d9ae;
+  for (let i = 0; i < 40; i++) {
+    addFitting(230.25 + i * 0.5, 0.008, 10.55, 0.478, 0.016, 6.3, timber[i % timber.length]);
+  }
+  // Brass curb inlay and a two-rail fence silhouette against the water.
+  addFitting(240, 0.021, 7.55, 20, 0.012, 0.13, cream);
+  for (const height of [0.48, 0.98]) {
+    addFitting(240, height, 13.5, 19.5, 0.065, 0.08, iron);
+  }
+  for (let i = 0; i <= 6; i++) {
+    const x = 230.25 + i * 3.25;
+    addFitting(x, 0.55, 13.5, 0.13, 1.1, 0.13, iron);
+    addFitting(x, 1.09, 13.5, 0.18, 0.10, 0.18, cream);
+  }
+  colliders.push({ x0: 230.18, x1: 249.82, z0: 13.43, z1: 13.57 });
+
+  // Put relief on the nearest limestone facade. The balcony fascias,
+  // reveals and shutters cast readable bands even with sun shadows off.
+  const facadeX = 223;
+  for (const y of [4.4, 8.3, 12.2]) {
+    addFitting(facadeX + 0.25, y, 24, 0.74, 0.22, 11.3, cream);
+    addFitting(facadeX + 0.6, y + 0.23, 24, 0.08, 0.31, 11.3, iron);
+    for (const z of [20.4, 24, 27.6]) {
+      for (const side of [-1, 1]) {
+        addFitting(facadeX + 0.07, y + 1.18, z + side * 0.85, 0.14, 1.5, 0.31, iron);
+      }
+    }
+  }
+  const trim = new THREE.InstancedMesh(new THREE.BoxGeometry(1, 1, 1),
+    new THREE.MeshLambertMaterial(), fittings.length);
+  const transform = new THREE.Object3D();
+  fittings.forEach((part, i) => {
+    transform.position.set(part.x, part.y, part.z);
+    transform.scale.set(part.width, part.height, part.depth);
+    transform.updateMatrix();
+    trim.setMatrixAt(i, transform.matrix);
+    trim.setColorAt(i, new THREE.Color(part.color));
+  });
+  trim.name = 'Tidal Gate landing and balcony trim';
+  trim.receiveShadow = true;
+  scene.add(trim);
   // HARBOUR FIX — moored boat: a small boat floating on the channel
   // water just south of the quay, placed so it reads in the cover
   // frame (the teal water strip at the frame's left edge).

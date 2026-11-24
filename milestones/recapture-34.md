@@ -1,7 +1,7 @@
 # Recapture 34 — witnessed re-capture (recording 34)
 
 Recording 34 ID: `01a20c13-e32d-7663-93a2-2efa799a9e47`
-Commit: `PENDING` (remote main matches)
+Commit: `1d9a6b6645be8e063b1d07dba4bb50b3dadcc8c0` (remote main matches)
 Base: `32b039ec` (recapture 32)
 
 ## Why a new recording

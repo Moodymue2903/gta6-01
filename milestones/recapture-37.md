@@ -1,7 +1,7 @@
 # Recapture 37 — Tidal Gate candidate (recording 37)
 
 Recording 37 ID: `01a20c51-a869-751b-b384-cc5709c3afef`
-Commit: `PENDING` (remote main matches)
+Commit: `f440c0f4` (remote main matches)
 Base: `653eafa8` (recapture 34)
 
 ## What this is

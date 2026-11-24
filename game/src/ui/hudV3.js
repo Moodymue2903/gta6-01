@@ -16,6 +16,7 @@
 // ticker, damage readout strip, dialogue box, key hints, health /
 // armour bars. Centre 60% of the frame stays clear.
 
+import * as THREE from 'three';
 import { buildViewModel } from './viewModel.js';
 import { drawBakedMinimap } from './minimapBaked.js';
 
@@ -65,6 +66,20 @@ const HUDV3_CSS = `
 #hv3-wanted.grey .w-stars .star.on { color: #9aa0a6; }
 #hv3-wanted .w-state { font-size: 12px; letter-spacing: 2px; color: #fbbf24; font-weight: 800;
   text-shadow: 0 1px 3px rgba(0,0,0,.9); margin-top: 2px; }
+/* Spotlight countdown: gold, centred under the wanted plate, only
+   visible while the marking window is live. */
+#hv3-spotlight { position: absolute; top: 66px; left: 50%; transform: translateX(-50%);
+  display: none; font-size: 14px; font-weight: 800; letter-spacing: 2px; color: #ffd23f;
+  text-shadow: 0 1px 3px rgba(0,0,0,.9); }
+#hv3-spotlight.show { display: block; }
+/* Spotlight world markers: gold diamonds floating above marked
+   police units, positioned each frame by projecting the unit's
+   world position through the camera. Pointer-events none (HUD root
+   already is); hidden when the window expires or the unit is
+   behind the camera. */
+.hv3-mark { position: absolute; width: 12px; height: 12px; margin: -6px 0 0 -6px;
+  background: #ffd23f; transform: rotate(45deg); display: none;
+  box-shadow: 0 0 8px rgba(255, 210, 63, 0.9); }
 #hv3-cash { width: 100%; box-sizing: border-box; text-align: right;
   background: linear-gradient(135deg, rgba(40, 22, 30, 0.82), rgba(70, 34, 30, 0.7)); border: 1.5px solid rgba(255, 194, 122, .45);
   border-left: 3px solid #f2a33a; border-radius: 6px; padding: 8px 12px; }
@@ -164,6 +179,15 @@ export class HUDV3 {
     this.missionCard = el('div', 'hv3-mission', this.leftCol);
     this.roster = el('div', 'hv3-roster', this.leftCol);
     this.wanted = el('div', 'hv3-wanted', hud, '<span class="w-stars"></span><div class="w-state"></div>');
+    this.spotlightEl = el('div', 'hv3-spotlight', hud);
+    // Pool of world-marker diamonds (max 12 police units on screen).
+    this._markPool = [];
+    for (let i = 0; i < 12; i++) {
+      const m = document.createElement('div');
+      m.className = 'hv3-mark';
+      hud.appendChild(m);
+      this._markPool.push(m);
+    }
     this.rightCol = el('div', 'hv3-right', hud);
     this.cashBox = el('div', 'hv3-cash', this.rightCol);
     this.minimapWrap = el('div', 'hv3-minimap-wrap', hud);
@@ -213,6 +237,37 @@ export class HUDV3 {
     this.dialogue.classList.add('show');
   }
 
+  // Gold diamonds above every police unit while Spotlight is live.
+  // Projects each unit's world position through the live camera;
+  // units behind the camera or off-screen get no marker. When the
+  // window is inactive every marker hides (base minimap blips are
+  // unaffected — they are drawn by drawBakedMinimap regardless).
+  renderSpotlightMarkers(active) {
+    const g = this.game;
+    const pool = this._markPool;
+    if (!active || !g.camera || !g.police) {
+      for (const m of pool) m.style.display = 'none';
+      return;
+    }
+    const spots = g.police.units.map((u) => ({ x: u.pos.x, z: u.pos.z }));
+    if (g.police.heli) spots.push({ x: g.police.heli.mesh.position.x, z: g.police.heli.mesh.position.z });
+    const W = window.innerWidth;
+    const H = window.innerHeight;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < pool.length; i++) {
+      const m = pool[i];
+      if (i >= spots.length) { m.style.display = 'none'; continue; }
+      v.set(spots[i].x, 4, spots[i].z).project(g.camera);
+      if (v.z > 1) { m.style.display = 'none'; continue; }
+      const sx = (v.x * 0.5 + 0.5) * W;
+      const sy = (-v.y * 0.5 + 0.5) * H;
+      if (sx < 0 || sx > W || sy < 0 || sy > H) { m.style.display = 'none'; continue; }
+      m.style.display = 'block';
+      m.style.left = sx + 'px';
+      m.style.top = (sy - 26) + 'px';
+    }
+  }
+
   banner(title, sub = '') {
     this.bannerEl.innerHTML = `<div class="banner-title">${esc(title)}</div><p>${esc(sub)}</p>`;
     this.bannerEl.classList.add('show');
@@ -256,6 +311,16 @@ export class HUDV3 {
     w.classList.toggle('grey', vm.wanted.state === 'grey');
     w.querySelector('.w-stars').innerHTML = [0, 1, 2, 3, 4].map((i) => `<span class="star${i < vm.wanted.stars ? ' on' : ''}">★</span>`).join('');
     w.querySelector('.w-state').textContent = vm.wanted.label;
+
+    // Spotlight HUD countdown + world diamond markers. The timer
+    // reads from the view-model (live game state, never a literal).
+    if (vm.spotlight.active) {
+      this.spotlightEl.textContent = 'SPOTLIGHT ' + vm.spotlight.secondsLeft + 's';
+      this.spotlightEl.classList.add('show');
+    } else {
+      this.spotlightEl.classList.remove('show');
+    }
+    this.renderSpotlightMarkers(vm.spotlight.active);
 
     if (vm.roster.length > ZERO || vm.rosterMore > ZERO) {
       const total = vm.roster.length + vm.rosterMore;

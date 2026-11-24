@@ -128,7 +128,14 @@ export function buildViewModel(game) {
     target: target ? { x: target.x, z: target.z } : null,
     heat: pol.stars > 0,
     heliPool: pol.heli ? { x: pol.heli.pool.position.x, z: pol.heli.pool.position.z } : null,
+    // Spotlight: global marking window — every police blip gets the
+    // gold ring + chevron while this is true. Base blips are drawn
+    // regardless; this only ADDS the marked overlay, never hides.
+    spotlight: prog.isPoliceMarked(),
+    time: game.time,
   };
+
+  // Spotlight HUD timer (seconds left, 0 when inactive).
 
   // Career data for the pause menu.
   let career = null;
@@ -194,6 +201,10 @@ export function buildViewModel(game) {
     crew,
     location: districtNameAt(px, pz),
     minimap,
+    spotlight: {
+      active: prog.isPoliceMarked(),
+      secondsLeft: prog.spotlightSecondsLeft(),
+    },
     career,
     crosshair: !inCar && (game.state === 'playing' || game.shotKind === 'combat'),
     prompt: game.hud ? game.hud.promptText : '',

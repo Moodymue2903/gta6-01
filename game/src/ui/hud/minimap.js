@@ -84,6 +84,23 @@ export function drawMinimap(canvas, vm) {
     ctx.beginPath();
     ctx.arc(x, y, r, ZERO, Math.PI * TWO);
     ctx.fill();
+    // Spotlight (legacy minimap path): base blip always drawn above;
+    // the gold ring + chevron are added on top while marked.
+    if (d.kind === 'police' && mm.spotlight) {
+      const pulse = r + 4 + Math.sin((mm.time || 0) * 8) * 2;
+      ctx.beginPath();
+      ctx.arc(x, y, pulse, ZERO, Math.PI * TWO);
+      ctx.strokeStyle = '#ffd23f';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      ctx.fillStyle = '#ffd23f';
+      ctx.beginPath();
+      ctx.moveTo(x, y - r - 10);
+      ctx.lineTo(x - 5, y - r - 3);
+      ctx.lineTo(x + 5, y - r - 3);
+      ctx.closePath();
+      ctx.fill();
+    }
   }
   if (mm.target) {
     const [x, y] = toMap(mm.target.x, mm.target.z);

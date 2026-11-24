@@ -156,8 +156,26 @@ export function drawBakedMinimap(canvas, vm) {
     const [x, y] = toMap(d.x, d.z);
     if (Math.hypot(x - centre, y - centre) > centre) continue;
     if (d.kind === 'police') {
+      // Base blip stays visible ALWAYS — Spotlight never hides
+      // police, it only adds the gold marked overlay on top.
       ctx.fillStyle = '#ff3a3a';
       ctx.fillRect(x - 4, y - 4, 8, 8);
+      if (mm.spotlight) {
+        const pulse = 9 + Math.sin((mm.time || 0) * 8) * 2;
+        ctx.beginPath();
+        ctx.arc(x, y, pulse, ZERO, Math.PI * TWO);
+        ctx.strokeStyle = '#ffd23f';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        // Gold chevron above the blip (map-up = player's heading).
+        ctx.fillStyle = '#ffd23f';
+        ctx.beginPath();
+        ctx.moveTo(x, y - 16);
+        ctx.lineTo(x - 5, y - 9);
+        ctx.lineTo(x + 5, y - 9);
+        ctx.closePath();
+        ctx.fill();
+      }
     } else if (d.kind === 'heli') {
       ctx.fillStyle = '#ff9a3a';
       ctx.beginPath();

@@ -1,6 +1,7 @@
 // VERMILION KEYS — progression: cash, respect ranks, garage, saves.
-// Crew perks run on cooldowns: Zia ghost-plates (drops heat), Lo fixes
-// the car, Kiki reveals every police unit on the minimap.
+// Crew perks run on cooldowns: Zia ghost-plates (sheds exactly one
+// wanted star), Lo fixes the car, Kiki spotlights every police unit
+// on the minimap for 20 s.
 // FIX ROUND 3 — the career is a real ledger, not a number:
 //   * career stats (cars stolen, escapes, distance, takedowns, jumps,
 //     races won, highest wanted) are recorded by the systems that earn
@@ -45,6 +46,17 @@ export const UPGRADES = [
 
 const PAINTS = [0xff6a4a, 0x3a7ad9, 0xe8c93a, 0x2ea88a, 0xd97bd9, 0xe8e8e8, 0xd97b2e, 0x8a6ad9];
 
+// Wanted stars from heat — the ONE definition. Monotonic
+// non-decreasing: heat 0 -> 0 stars, 1-20 -> 1, 21-40 -> 2,
+// 41-60 -> 3, 61-80 -> 4, 81-100 -> 5. Same formula police.js uses
+// inline (addHeat / decay); keep them in sync if either changes.
+export function wantedStars(heat) {
+  return heat <= 0 ? 0 : Math.min(5, Math.ceil(heat / 20));
+}
+
+// Spotlight: how long police units stay marked after activation.
+export const SPOTLIGHT_SECONDS = 20;
+
 export class Progression {
   constructor(game) {
     this.game = game;
@@ -54,6 +66,7 @@ export class Progression {
     this.ownedCars = []; // {cls, color} stored at the garage
     this.crewUsed = { mira: -999, lo: -999, kiki: -999 };
     this.revealUntil = 0;
+    this.spotlightUntil = 0;
     // Tune from the save, held until the starter car exists — see
     // restoreTune(). The tune lives on the car in memory, so the save
     // has to carry it and the Game has to apply it after the car is built.
@@ -125,6 +138,56 @@ export class Progression {
     return Math.max(0, CREW[id].cooldown - (this.game.time - this.crewUsed[id]));
   }
 
+  // --- Ghost plates: shed EXACTLY one wanted star. Never a fixed
+  // heat drop: heat -= 22 can drop two stars at a boundary (e.g.
+  // heat 41 -> 19 is 3 stars -> 1 star). Binary search finds the
+  // highest heat <= current heat yielding exactly one star fewer.
+  shedExactlyOneWantedStar() {
+    const pol = this.game.police;
+    const before = wantedStars(pol.heat);
+    if (before <= 0) return 0;
+    const target = before - 1;
+    let lo = 0;
+    let hi = pol.heat;
+    while (lo < hi) {
+      const mid = Math.ceil((lo + hi) / 2);
+      if (wantedStars(mid) <= target) lo = mid;
+      else hi = mid - 1;
+    }
+    pol.heat = Math.max(0, lo);
+    pol.stars = wantedStars(pol.heat);
+    return before - wantedStars(pol.heat);
+  }
+
+  useGhostPlates() {
+    const shed = this.shedExactlyOneWantedStar();
+    if (shed === 0) {
+      this.game.hud?.banner('NO WANTED LEVEL TO SHED', 'Ghost plates need a wanted level to shed.');
+      return false;
+    }
+    this.game.hud?.banner('GHOST PLATES · -1 STAR', 'Plates swapped. They are looking for a different car now.');
+    return true;
+  }
+
+  // --- Spotlight: a REAL visible marking window. Global timestamp,
+  // so every current and newly spawned police unit is marked while
+  // the window is live. revealUntil is kept in sync so the crew
+  // card's active state (crewAbilities.js) still reads it.
+  useSpotlight() {
+    this.spotlightUntil = this.game.time + SPOTLIGHT_SECONDS;
+    this.revealUntil = this.spotlightUntil;
+    this.game.hud?.banner('POLICE MARKED · 20s', 'Every unit in the Keys is marked.');
+    return true;
+  }
+
+  isPoliceMarked() {
+    return this.game.time < this.spotlightUntil;
+  }
+
+  spotlightSecondsLeft() {
+    return Math.max(0, Math.ceil(this.spotlightUntil - this.game.time));
+  }
+
   useCrew(id) {
     if (!this.crewReady(id)) return false;
     this.crewUsed[id] = this.game.time;
@@ -132,15 +195,14 @@ export class Progression {
     this.game.activities?.recordCrewUse();
     const player = this.game.player;
     if (id === 'mira') {
-      this.game.police.heat = Math.max(0, this.game.police.heat - 22);
-      this.game.police.stars = this.game.police.heat <= 0 ? 0 : Math.min(5, Math.ceil(this.game.police.heat / 20));
+      this.useGhostPlates();
       this.game.hud?.showDialogue('Zia', 'DRIVER', 'Plates swapped. They are looking for a different car now.');
     } else if (id === 'lo') {
       if (player.inCar) player.inCar.repair();
       player.heal(25);
       this.game.hud?.showDialogue('Lo', 'MECHANIC', 'Patched up. Good as new — do not scratch it again.');
     } else if (id === 'kiki') {
-      this.revealUntil = this.game.time + 20;
+      this.useSpotlight();
       this.game.hud?.showDialogue('Kiki', 'LOOKOUT', 'Spotlight. Every unit in the Keys is on your map.');
     }
     this.game.audio?.blip('crew');

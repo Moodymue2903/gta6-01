@@ -1,8 +1,8 @@
 // VERMILION KEYS — crew abilities (FIX ROUND 7).
 // Activation feedback + the one extra effect on top of progression.js.
-// useCrew() in progression.js ALREADY does the real work — Zia drops
-// heat 22 and recomputes stars, Lo repairs the car and heals 25, Kiki
-// sets revealUntil = time + 20 — so this module NEVER re-implements
+// useCrew() in progression.js ALREADY does the real work — Zia sheds
+// exactly one wanted star, Lo repairs the car and heals 25, Kiki
+// sets spotlightUntil/revealUntil = time + 20 — so this module NEVER re-implements
 // those effects and never writes crewUsed. It only OBSERVES
 // progression.crewUsed timestamps, detects a fresh use, records the
 // activation for the HUD, and adds the one effect progression.js does

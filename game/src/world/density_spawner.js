@@ -67,11 +67,26 @@ export function stageCoverDensity(game) {
   // (2.5 m spacing, x 232-250): the fix-5 row ran to x 270, and the
   // cover camera now sits at (272, 9) — a ped 3 m from the lens
   // would fill the frame. The north row keeps its full spread.
+  // RECORDING 33 (user, 2026-11-24 10:24 IST): the 32b039ec cover
+  // frame reads peds as WALKING ON WATER. The cover NPCs and the
+  // stageCoverCrowd archetypes were moved to island 3, but this
+  // south row (x 232-250, z 9-13) still stands on the quay slabs in
+  // the water channel (x 230-250) and reads as on the teal water.
+  // Moved BOTH rows to the NEAR side (island 3, x 250-270): south
+  // row x 252-269.5, north row x 250-267.5 (2.5 m spacing, so no ped
+  // sits 3 m from the lens). Cover branch only (stageCoverDensity
+  // is cover).
+  // REVISION (recapture 3): the south row at z 9-13, x 252-269.5
+  // fell out of frame to the left (too far south for the camera's
+  // west-northwest view), so the left side read empty. South row
+  // moved to the sidewalk edge (x 250-257, z 6-8): island 3 tan
+  // land, inside the frame's left edge, off the road. North row
+  // unchanged (visible near the building).
   const pedSpots = [];
   for (let i = 0; i < 16; i++) {
     pedSpots.push({
-      x: 232 + (i % 8) * (i < 8 ? 2.5 : 5.5),
-      z: i < 8 ? 9 + (i % 3) * 2 : -9 - (i % 3) * 2,
+      x: (i < 8 ? 250 : 250) + (i % 8) * (i < 8 ? 1.0 : 2.5),
+      z: i < 8 ? 6 + (i % 3) * 1 : -9 - (i % 3) * 2,
       flee: i < 6,
     });
   }

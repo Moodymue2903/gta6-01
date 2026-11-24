@@ -204,15 +204,23 @@ export class PopulationDirector {
     // Archetype peds on the promenade edges, interleaved with (not on
     // top of) the 16 staged peds at z +/-9..13: tourists south, a
     // skater pair north, lookouts watching the chase from both sides.
+    // RECORDING 33 (user, 2026-11-24 10:24 IST): the 32b039ec cover
+    // frame reads peds as WALKING ON WATER. The 8 cover NPCs were
+    // moved to island 3, but these archetypes at x 234-249 stand on
+    // the quay slabs in the water channel (x 230-250) and still read
+    // as on the teal water. Moved to the NEAR side (island 3,
+    // x 252-267) on tan land, no water between them and the camera;
+    // south ones shifted to z 7-8 so they don't sit on the cover
+    // NPCs (z 10-14). Cover branch only (stageCoverCrowd is cover).
     const spots = [
-      { kind: 'tourist', x: 236, z: 10 },
-      { kind: 'tourist', x: 242, z: -10 },
-      { kind: 'tourist', x: 248, z: 11 },
-      { kind: 'skater',  x: 238, z: -11 },
-      { kind: 'skater',  x: 246, z: 10 },
-      { kind: 'lookout', x: 234, z: -9 },
-      { kind: 'lookout', x: 249, z: -11 },
-      { kind: 'tourist', x: 240, z: 11 },
+      { kind: 'tourist', x: 252, z: 7 },
+      { kind: 'tourist', x: 258, z: -10 },
+      { kind: 'tourist', x: 264, z: 8 },
+      { kind: 'skater',  x: 254, z: -11 },
+      { kind: 'skater',  x: 262, z: 7 },
+      { kind: 'lookout', x: 250, z: -9 },
+      { kind: 'lookout', x: 265, z: -11 },
+      { kind: 'tourist', x: 256, z: 8 },
     ];
     for (const s of spots) {
       const p = this.spawnArchetype(s.kind, s.x, s.z);

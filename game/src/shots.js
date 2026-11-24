@@ -831,9 +831,20 @@ export function stageShot(kind, game) {
     // with a bright wedge in the revision-3 frame, so it goes further
     // out and higher (~52 m out, 20 m up) and the beam is restrained
     // again (cone 0.08, outer 0.02, pool 0.12).
+    // RECORDING 33 (user, 2026-11-24 10:11 IST): the 32b039ec cover
+    // frame reads the heli as STANDING ON the tall building's roofline
+    // — at 18 m up it sits at about roof height, and from the +30°
+    // cover camera it projects onto the building with no sky gap.
+    // Raise it and push it out so it sits in OPEN SKY above the
+    // roofline, clear of the building. Beam opacities unchanged.
+    // REVISION (recapture 1): 32 m put the heli OUT of the frame
+    // (above the top edge). 25 m lifts it ~30 px in the frame —
+    // clear of the roofline, still in frame. Modest push-out only.
+    // REVISION (recapture 2): 25 m still clips the rotor at the top
+    // edge. 23 m brings it fully in frame, still clear of the roof.
     if (g.police.heli) {
       const hp = g.police.heli;
-      hp.mesh.position.set(runCar.pos.x - 26, 18, runCar.pos.z + 20);
+      hp.mesh.position.set(runCar.pos.x - 28, 23, runCar.pos.z + 22);
       hp.mesh.lookAt(runCar.pos.x, 0, runCar.pos.z);
       hp.pool.position.set(runCar.pos.x, 0.15, runCar.pos.z);
       const ud = hp.mesh.userData;
@@ -849,16 +860,31 @@ export function stageShot(kind, game) {
     // poses, no sim ticks after, so they stay on their marks). The
     // west end (x 210-230) is clear of the existing archetypes
     // (x 234-249) and off the road (z +10..12 is promenade).
+    // RECORDING 33 (user, 2026-11-24 10:24 IST): the 32b039ec cover
+    // frame reads the NPCs as WALKING ON WATER — they stand on island
+    // 2 (x 210-230) with the water channel (x 230-250) between them
+    // and the camera, so the teal water reads under their feet.
+    // REVISION (recapture 1): shifting them 15 m west (x 195-215)
+    // did NOT fix it — any spot on island 2 has the channel between
+    // it and the camera. Moved to the NEAR side: island 3's south
+    // promenade (x 255-268, z 10-14), west of the hero, on tan land
+    // with NO water between them and the camera. They stay off the
+    // road (z +10..14 is promenade) and keep the left side populated.
+    // REVISION (recapture 3): x 255-268, z 10-14 put them too close
+    // to the camera's south edge — out of frame to the left, so the
+    // left side read empty. Moved to the sidewalk edge (x 250-258,
+    // z 6-8): still island 3 tan land, no water between them and the
+    // camera, but inside the frame's left edge and off the road.
     // spawnArchetype is the population director's real spawner.
     for (const s of [
-      { kind: 'tourist', x: 210, z: 11 },
-      { kind: 'skater', x: 216, z: 12 },
-      { kind: 'tourist', x: 222, z: 10 },
-      { kind: 'lookout', x: 228, z: 12 },
-      { kind: 'tourist', x: 212, z: 10 },
-      { kind: 'skater', x: 218, z: 11 },
-      { kind: 'tourist', x: 224, z: 12 },
-      { kind: 'lookout', x: 230, z: 10 },
+      { kind: 'tourist', x: 250, z: 6 },
+      { kind: 'skater', x: 252, z: 8 },
+      { kind: 'tourist', x: 254, z: 7 },
+      { kind: 'lookout', x: 256, z: 6 },
+      { kind: 'tourist', x: 251, z: 8 },
+      { kind: 'skater', x: 253, z: 7 },
+      { kind: 'tourist', x: 255, z: 6 },
+      { kind: 'lookout', x: 257, z: 8 },
     ]) {
       const p = g.population.spawnArchetype(s.kind, s.x, s.z);
       p.state = 'walk';
